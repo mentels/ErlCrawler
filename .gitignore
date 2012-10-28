@@ -1,1 +1,2 @@
-apps/crawler_app/ebin/**/*
+apps/crawler_app/ebin/
+deps/
