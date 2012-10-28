@@ -1,0 +1,32 @@
+{application, crawler,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  mongodb
+                 ]},
+  {mod, { crawler_app, [] }},
+  {env, [
+  	{persistence_cfg, []},
+  	{initial_id, 1000},
+  	{db_cfg,[
+  				{conn_cfg, {'backrub2.iisg.agh.edu.pl', 27017}},
+    			{storage_cfg, [
+        						{words, {'Crawler', 'Words'}}, 
+         						{index, {'Crawler', 'Index'}} 
+         					   ]},
+         		{initial_bucket_id, 0}
+ 			]},
+ 	{db_cleaner_cfg, [
+ 						{max_percentage_of_unused_bucket_indicies, 50},
+						{max_number_of_indicies_in_cache, 10} 						
+ 					]},
+ 	{cache_cfg, [
+ 						{percentage_of_cache_to_flush, 50},
+						{max_number_of_words_ids_in_cache, 10} 						
+ 					]}
+  ]}
+ ]}.
