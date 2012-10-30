@@ -34,7 +34,12 @@ perform_test(TestNo) ->
 	RandomUrlId = get_random_url_id(),
 	persistence_server:add_index(RandomString, RandomUrlId),
 	io:format("Test no: ~w~n Word: ~w~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
-	perform_test(TestNo + 1).
+	if
+		TestNo == 20000000 ->
+			io:format("Testing finished!~n");
+		true ->
+			perform_test(TestNo + 1).
+	end.
 
 %%%
 %%% Generating random stuff. 
@@ -51,7 +56,7 @@ get_random_string(Length) ->
 	[get_random_char() | get_random_string(Length - 1)].
 
 get_random_char() ->
-	random:uniform(122) + 97.
+	random:uniform(26) + 96.
 
 %%
 %% Urls.
