@@ -38,7 +38,7 @@ perform_test(TestNo) ->
 		TestNo == 20000000 ->
 			io:format("Testing finished!~n");
 		true ->
-			perform_test(TestNo + 1).
+			perform_test(TestNo + 1)
 	end.
 
 %%%
