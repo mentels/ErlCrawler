@@ -22,11 +22,11 @@
  			]},
  	{db_cleaner_cfg, [
  						{max_percentage_of_unused_bucket_indicies, 50},
-						{max_number_of_indicies_in_cache, 1000} 						
+						{max_number_of_indicies_in_cache, 700} 						
  					]},
  	{cache_cfg, [
  						{percentage_of_cache_to_flush, 50},
-						{max_number_of_words_ids_in_cache, 1000} 						
+						{max_number_of_words_ids_in_cache,500} 						
  					]}
   ]}
  ]}.
