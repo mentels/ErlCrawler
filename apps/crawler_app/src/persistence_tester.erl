@@ -38,6 +38,8 @@ perform_test(TestNo) ->
 		TestNo == 20000000 ->
 			io:format("Testing finished!~n");
 		true ->
+			%% Simulates the time that is needed for processing subsystem to do its job.
+			timer:sleep(20),
 			perform_test(TestNo + 1)
 	end.
 
