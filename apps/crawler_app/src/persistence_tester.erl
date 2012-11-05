@@ -30,14 +30,14 @@ perform_test(TestNo) ->
 	RandomUrlId = get_random_url_id(),
 	persistence_server:add_index(RandomString, RandomUrlId),
 	if
-		TestNo == 10000000 ->
+		TestNo == 20000000 ->
 			io:format("Testing finished!~n");
 		true ->
 			%% Simulates the time that is needed for processing subsystem to do its job.
-			timer:sleep(20),
+			timer:sleep(10),
 			case is_test_no_dividible_by_1k(TestNo) of
 				true ->
-					io:format("Test no: ~w~n Word: ~w~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
+					io:format("Test no: ~w~n Word: ~s~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
 					perform_test(TestNo + 1);
 				false ->
 					perform_test(TestNo + 1)
