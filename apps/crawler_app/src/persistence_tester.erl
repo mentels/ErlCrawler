@@ -35,7 +35,7 @@ perform_test(TestNo) ->
 	persistence_server:add_index(RandomString, RandomUrlId),
 	io:format("Test no: ~w~n Word: ~w~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
 	if
-		TestNo == 20000000 ->
+		TestNo == 10000000 ->
 			io:format("Testing finished!~n");
 		true ->
 			%% Simulates the time that is needed for processing subsystem to do its job.

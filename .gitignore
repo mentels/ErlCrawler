@@ -1,2 +1,3 @@
 apps/crawler_app/ebin/
 deps/
+*.dump
