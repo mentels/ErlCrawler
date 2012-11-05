@@ -63,11 +63,6 @@ handle_cast({add_entry, BucketId, NewEntryUrlsIdsCnt, WordId}, State) ->
 			NewUrlsIdsCnt = UrlsIdsCnt - NewUnusedUrlsIdsCnt,
 			UpdatedState = update_cache_size(get_cache_size(State) - WordsCnt, State),
 			clean_indicies(BucketId, WordsIdsList ++ [WordId], NewUrlsIdsCnt),
-			io:format("UrlsIdsCnt~w~n", [UrlsIdsCnt]),
-			io:format("UnusedUrlsIdsCnt~w~n", [UnusedUrlsIdsCnt]),
-			io:format("NewEntryUrlsIdsCnt~w~n", [NewEntryUrlsIdsCnt]),
-			io:format("NewUnusedUrlsIdsCnt~w~n", [NewUnusedUrlsIdsCnt]),
-			io:format("NewUrlsIdsCnt~w~n", [NewUrlsIdsCnt]),
 			if
 				NewUrlsIdsCnt == 0 ->
 					%% All the urls ids in the bucket has been cleaned.
