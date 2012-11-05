@@ -25,22 +25,32 @@ start_testing() ->
 %% Local Functions
 %%
 
-%%
-%% Counts files' lines.
-%%
-
 perform_test(TestNo) ->
 	RandomString = get_random_string(),
 	RandomUrlId = get_random_url_id(),
 	persistence_server:add_index(RandomString, RandomUrlId),
-	io:format("Test no: ~w~n Word: ~w~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
 	if
 		TestNo == 10000000 ->
 			io:format("Testing finished!~n");
 		true ->
 			%% Simulates the time that is needed for processing subsystem to do its job.
 			timer:sleep(20),
-			perform_test(TestNo + 1)
+			case is_test_no_dividible_by_1k(TestNo) of
+				true ->
+					io:format("Test no: ~w~n Word: ~w~n UrlId ~w~n", [TestNo, RandomString, RandomUrlId]),
+					perform_test(TestNo + 1);
+				false ->
+					perform_test(TestNo + 1)
+			end
+	end.
+
+
+is_test_no_dividible_by_1k(TestNo) ->
+	if
+		TestNo rem 1000 == 0 ->
+			true;
+		true ->
+			false
 	end.
 
 %%%
