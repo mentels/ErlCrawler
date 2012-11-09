@@ -10,6 +10,7 @@
 %% ===================================================================
 
 start(_StartType, StartArgs) ->
+	lager:start(),
     crawler_sup:start_link(StartArgs).
 
 stop(_State) ->
