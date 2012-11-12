@@ -7,6 +7,8 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/1, add_indicies/3, get_index/2, delete_indicies/3]).
+%%% API for testing
+-export([newformat_save_indicies/0, newformat_get_index/0, newformat_delete_indicies/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -30,6 +32,15 @@ get_index(BucketId, WordId) ->
 
 delete_indicies(BucketId, WordsIdsList, NewBucketSize) ->
 	gen_server:cast(?SERVER, {delete_indicies, BucketId, WordsIdsList, NewBucketSize}).
+
+newformat_save_indicies() ->
+	gen_server:cast(?SERVER, {test_save_indicies}).
+
+newformat_delete_indicies() ->
+	gen_server:cast(?SERVER, {test_delete_indicies}).
+
+newformat_get_index() ->
+	gen_server:call(?SERVER, {test_get_index}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -57,6 +68,31 @@ handle_call({get_index, BucketId, WordId}, _From, State) ->
 	Reply = get_index(BucketId, WordId, DbName, CollName, Conn),
 	{reply, Reply, State};
 
+%%%
+%%% Tests for new data format
+%%%
+handle_call({test_get_index}, _From, State) ->
+	%% Set config.
+	Conn = retrieve_connection(State),
+	DbName = retrieve_database_name(State),
+	CollName = retrieve_collection_name(State),
+	
+	%% Prepare action; 100 indicates word id
+	SelectorDoc = {'_id', 55}, 
+	ProjectionDoc = {indicies, 1, '_id', 0},
+	FindAction = fun() ->
+						 mongo:find_one(CollName, SelectorDoc, ProjectionDoc)
+				 end,
+	
+	%% Perform action and find index for word id == 100
+	WordId = 100,
+	{ok, {{indicies, IndexDocList}}} = perform_mongo_action(FindAction, DbName, Conn),
+	Index = lists:keyfind(WordId, 2, IndexDocList),
+	{reply, Index, State};
+	
+%%%
+
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -74,6 +110,56 @@ handle_cast({delete_indicies, BucketId, WordsIdsList, NewBucketSize}, State) ->
 	CollName = retrieve_collection_name(State),
 	delete_indicies(BucketId, WordsIdsList, NewBucketSize, DbName, CollName, Conn),
 	{noreply, State};
+
+%%%
+%%% Tests for new data format
+%%%
+handle_cast({test_save_indicies}, State) ->
+	%%% Get config.
+	Conn = retrieve_connection(State),
+	DbName = retrieve_database_name(State),
+	CollName = retrieve_collection_name(State),
+	
+	%% Prepare indicies.
+	Indicies = [
+					%% New format of index is: {word_id :  WordId, data:  [[UrlId, UrlId, ..., UrlId], UrlIdListSize] }
+					{'word_id', 100, data, [[1001, 1002, 1003], 3] },
+					{'word_id', 200, data, [[2001, 2002], 2] }
+				],
+	
+	%% Prepare bucket
+	Bucket = {'_id', 55, word_cnt, 2, url_cnt, 5, indicies, Indicies},
+	
+	%% Save bucket.
+	InsertAction = create_mongo_action(insert, CollName, Bucket, {}),
+	perform_mongo_action(InsertAction, DbName, Conn),
+	
+	%% Return
+	{noreply, State};
+
+
+handle_cast({test_delete_indicies}, State) ->
+	%%% Get config.
+	Conn = retrieve_connection(State),
+	DbName = retrieve_database_name(State),
+	CollName = retrieve_collection_name(State),
+	
+	%% Prepare action.
+	BucketId = 55,
+	WordIdList = [ 100 ],
+	SelectorDoc = {'_id', BucketId},
+	ModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordIdList} } } },
+	ModifyAction = fun () ->
+							mongo:modify(CollName, SelectorDoc, ModifierDoc)
+				   end,
+	
+	%% Perform action.
+	perform_mongo_action(ModifyAction, DbName, Conn),
+	
+	{noreply, State};
+	
+	
+%%%
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
