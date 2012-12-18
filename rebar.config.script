@@ -1,0 +1,2 @@
+file:copy("configs/lager.app.src", "deps/lager/src/lager.app.src"),
+CONFIG.

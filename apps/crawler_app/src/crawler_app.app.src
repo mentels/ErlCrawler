@@ -1,0 +1,20 @@
+{application, crawler_app,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { crawler_app, []}},
+  {env, [{processing_cfg,
+  			[
+  			 {max_workers, 30},
+  			 {uds_fail_interval, 500},
+  			 {connection_timeout, 1000},
+  			 {download_timeout, 5000},
+  			 {redirect_limit, 10}
+  			]
+  		}]}
+ ]}.
