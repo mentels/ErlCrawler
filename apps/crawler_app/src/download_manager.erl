@@ -43,10 +43,14 @@ get_current_active_workers(Pid)->
 %% 1. START PROCESSING===========
 %% ==============================
 
-handle_call(start_processing,_From,{state,_Active_workers,_Max_workers,_Cfg}=State) ->
-	io:format("Start processing called",[]),
-	NewState = spawn_downloaders(State),
-	{reply,ok,NewState};
+handle_call(start_processing,_From,{state,Active_workers,_Max_workers,Cfg}=State) ->
+	case url_download_server:pull(1) of
+		[{Url_id, Url}] -> 
+			spawn_monitor(downloader, download, [Url,Url_id,0,Cfg]),
+			{reply,ok,{state,Active_workers+1,_Max_workers,Cfg}};
+		_ ->
+			{reply,url_not_found,{state,Active_workers,_Max_workers,Cfg}}
+	end;
 
 %% ==============================
 %% 2. START PROCESSING===========
