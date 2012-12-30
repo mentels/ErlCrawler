@@ -12,8 +12,8 @@
   			[
   			 {max_workers, 30},
   			 {uds_fail_interval, 500},
-  			 {connection_timeout, 1000},
-  			 {download_timeout, 5000},
+  			 {connection_timeout, 3000},
+  			 {download_timeout, 15000},
   			 {redirect_limit, 10}
   			]
   		}]}

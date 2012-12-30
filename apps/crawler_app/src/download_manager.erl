@@ -21,6 +21,7 @@ start_link(Cfg) ->
 
 init([{_,MaxWorkers,_,_,_}=Cfg]) ->
 	process_flag(trap_exit, true),
+	timer:apply_interval(30000, download_manager, start_processing, []), %% TODO : Wczytywanie z configu ?
     {ok, #state{active_workers=0, max_workers=MaxWorkers, cfg=Cfg}}.
 
 start_processing()->
@@ -79,9 +80,8 @@ spawn_downloaders({state,Active_workers,Max_workers,{_,UDS_fail_interval,_,_,_}=
 		[{Url_id, Url}] -> 
 			spawn_monitor(downloader, download, [Url,Url_id,0,Cfg]),
 			spawn_downloaders({state,Active_workers+1,Max_workers,Cfg});
-		_ ->
-			timer:sleep(UDS_fail_interval), 
-			spawn_downloaders(State)
+		_ -> 
+			State
 	end;
 spawn_downloaders({state,Active_workers,Max_workers}=State) when Active_workers >= Max_workers ->
 	State.
