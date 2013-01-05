@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_word/1, set_words_bucket_id/2]).
+-export([start_link/1, add_word/1, set_words_bucket_id/2, freeze_bucket_id/2]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -27,6 +27,9 @@ add_word(Word) ->
 
 set_words_bucket_id(BucketId, WordsIdsList) ->
 	gen_server:cast(?SERVER, {set_words_bucket_id, BucketId, WordsIdsList}).
+
+freeze_bucket_id(WordId, BucketId) ->
+	gen_server:cast(?SERVER, {freeze_bucket_id, WordId, BucketId}).
 
 
 %% ------------------------------------------------------------------
@@ -66,6 +69,13 @@ handle_cast({set_words_bucket_id, BucketId, WordsIdsList}, State) ->
 	DbName = retrieve_database_name(State),
 	CollName = retrieve_collection_name(State),
 	set_words_bucket_id(BucketId, WordsIdsList, DbName, CollName, Conn),
+	{noreply, State};
+
+handle_cast({freeze_bucket_id, WordId, BucketId}, State) ->
+	Conn = retrieve_connection(State),
+	DbName = retrieve_database_name(State),
+	CollName = retrieve_collection_name(State),
+	freeze_bucket_id(WordId, BucketId, DbName, CollName, Conn),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -128,6 +138,12 @@ get_word_id(Word, DbName, CollName, Conn) ->
 set_words_bucket_id(BucketId, WordsIdsList, DbName, CollName, Conn) ->
 	SelectorDoc = {'_id', { bson:utf8("$in"), WordsIdsList}},
 	ModifierDoc = { bson:utf8("$set"), {bucket_id, BucketId}},
+	ModifyAction = create_mongo_action(modify, CollName, ModifierDoc, SelectorDoc),
+	perform_mongo_action(ModifyAction, DbName, Conn).
+
+freeze_bucket_id(WordId, BucketId, DbName, CollName, Conn) ->
+	SelectorDoc = {'_id', WordId},
+	ModifierDoc = { bson:utf8("$push"), {frozen_bucket_id, BucketId}},
 	ModifyAction = create_mongo_action(modify, CollName, ModifierDoc, SelectorDoc),
 	perform_mongo_action(ModifyAction, DbName, Conn).
 
