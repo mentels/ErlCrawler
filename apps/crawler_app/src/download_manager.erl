@@ -19,7 +19,7 @@
 start_link(Cfg) ->
     gen_server:start_link({local, download_manager}, download_manager, [Cfg], []).
 
-init([{_,MaxWorkers,_,_,_}=Cfg]) ->
+init([{MaxWorkers,_,_,_,_}=Cfg]) ->
 	process_flag(trap_exit, true),
 	timer:apply_interval(30000, download_manager, start_processing, []), %% TODO : Wczytywanie z configu ?
     {ok, #state{active_workers=0, max_workers=MaxWorkers, cfg=Cfg}}.
@@ -44,14 +44,16 @@ get_current_active_workers(Pid)->
 %% 1. START PROCESSING===========
 %% ==============================
 
-handle_call(start_processing,_From,{state,Active_workers,_Max_workers,Cfg}=State) ->
+handle_call(start_processing,_From,{state,Active_workers,Max_workers,Cfg}=State) when Active_workers < Max_workers ->
 	case url_download_server:pull(1) of
 		[{Url_id, Url}] -> 
 			spawn_monitor(downloader, download, [Url,Url_id,0,Cfg]),
-			{reply,ok,{state,Active_workers+1,_Max_workers,Cfg}};
+			{reply,ok,{state,Active_workers+1,Max_workers,Cfg}};
 		_ ->
-			{reply,url_not_found,{state,Active_workers,_Max_workers,Cfg}}
+			{reply,url_not_found,{state,Active_workers,Max_workers,Cfg}}
 	end;
+handle_call(start_processing,_From,{state,Active_workers,Max_workers,Cfg}=State) ->
+	{reply,ok,State};
 
 %% ==============================
 %% 2. START PROCESSING===========
@@ -96,8 +98,7 @@ handle_cast(Msg, State) ->
 %% handle_info/2
 handle_info({'DOWN', Ref, process, Pid2, Reason}, {state,Active_workers,Max_workers,Cfg}) ->
 	New_state=spawn_downloaders({state,Active_workers-1,Max_workers,Cfg}),
-    {noreply, New_state}.
-
+	{noreply, New_state}.
 
 %% terminate/2
 terminate(Reason, State) ->

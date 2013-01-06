@@ -35,15 +35,27 @@ simplify_urls(Address,[],Accum)->
 simp_rel2(Address,[H|T],Accum) ->
 	case string:left(H,2) of
 		%%Relative links. We have to cut the 'http://' heading because mochiweb cant deal with such paths. 
-		".." -> simplify_urls(Address,T,Accum++[string:concat("http://",mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),H)))]);
-		"./" -> simplify_urls(Address,T,Accum++[string:concat("http://",mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),string:sub_string(H, 3))))]);
+		".." -> case mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),H)) of
+					undefined -> simplify_urls(Address,T,Accum);
+					Url -> simplify_urls(Address,T,Accum++[string:concat("http://",Url)]);
+					_ -> simplify_urls(Address,T,Accum)
+				end;
+		"./" -> case mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),string:sub_string(H, 3))) of
+					undefined -> simplify_urls(Address,T,Accum);
+					Url -> simplify_urls(Address,T,Accum++[string:concat("http://",Url)]);
+					_ -> simplify_urls(Address,T,Accum)
+				end;
 		_ -> simp_rel1(Address,[H|T],Accum)			
 	end.
 
 simp_rel1(Address,[H|T],Accum) ->
 	case string:left(H,1) of
 		%%Cutting leading /, because http_url contains this
-		"/" -> simplify_urls(Address,T,Accum++[string:concat("http://",mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),string:sub_string(H,2))))]);
+		"/" -> case mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),string:sub_string(H,2))) of
+				   undefined -> simplify_urls(Address,T,Accum);
+				   Url -> simplify_urls(Address,T,Accum++[string:concat("http://",Url)]);
+					_ -> simplify_urls(Address,T,Accum)
+			   end;
 		_ -> simplify_urls(Address,T,Accum)			
 	end.
 
