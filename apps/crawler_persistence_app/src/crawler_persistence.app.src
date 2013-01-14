@@ -1,4 +1,4 @@
-{application, crawler,
+{application, crawler_persistence,
  [
   {description, ""},
   {vsn, "1"},
@@ -7,7 +7,7 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { crawler_app, [] }},
+  {mod, { crawler_persistence_app, [] }},
   {env, [
   	{persistence_cfg, [
   		{max_cache_doc_size, 2000}

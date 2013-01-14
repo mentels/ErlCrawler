@@ -1,4 +1,4 @@
--module(crawler_sup).
+-module(crawler_persistence_sup).
 
 -behaviour(supervisor).
 
