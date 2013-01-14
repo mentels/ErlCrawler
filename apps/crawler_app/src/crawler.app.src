@@ -18,30 +18,22 @@
 		{init_bucket_id, 0}
 	]},
 	{index_db_cfg, [   
-		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
+		{conn_cfg, {localhost, 27017}},
         {db, 'Crawler'},
         {coll, 'Index'}
 	]},
 	{word_db_cfg, [   
-		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
+		{conn_cfg, {localhost, 27017}},
         {db, 'Crawler'},
         {coll, 'Words'}
 	]},				
-  	{db_cfg,[
-		{conn_cfg, {'backrub2.iisg.agh.edu.pl', 27017}},
-		{storage_cfg, [
-			{words, {'Crawler', 'Words'}}, 
-			{index, {'Crawler', 'Index'}} 
-		   ]},
- 		{initial_bucket_id, 0}
- 			]},
  	{db_cleaner_cfg, [
- 		{max_word_id_cnt, 5},
+ 		{max_word_id_cnt, 1000},
         {max_unused_url_id_cnt_percentage, 50}			
  		]},
  	{cache_cfg, [
  		{percentage_to_flush, 50},
-        {max_cache_size, 11}  					
+        {max_cache_size, 5000}  					
  		]}
   ]}
  ]}.

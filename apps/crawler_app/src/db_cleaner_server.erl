@@ -201,7 +201,7 @@ is_bucket_ready_to_clean({_, UrlIdCnt, UnusedUrlIdCnt, _, _}, UrlIdListSize, Sta
 	%% UrlIdListSize referes to the number of urls' ids in the index to be deleted.
 	UnusedUrlIdRatio = get_state_value(unused_url_id_ratio, State),
 	if
-		((UnusedUrlIdCnt + UrlIdListSize) / UrlIdCnt) * 100 >= UnusedUrlIdRatio ->
+		((UnusedUrlIdCnt + UrlIdListSize) div UrlIdCnt) * 100 >= UnusedUrlIdRatio ->
 			true;
 		true ->
 			false
