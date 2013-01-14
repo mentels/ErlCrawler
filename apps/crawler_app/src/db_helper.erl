@@ -17,8 +17,8 @@ perform_action(ActionDesc, CollName, DbName, Conn) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-perform_db_action({find, Doc}, CollName, DbName, Conn) ->
-	Action = fun() -> mongo:find(CollName, Doc) end,
+perform_db_action({find, Doc, ProjectionDoc}, CollName, DbName, Conn) ->
+	Action = fun() -> mongo:find(CollName, Doc, ProjectionDoc) end,
 	perform_mongo_action(Action, DbName, Conn);
 
 perform_db_action({find_one, Doc, ProjectionDoc}, CollName, DbName, Conn) ->

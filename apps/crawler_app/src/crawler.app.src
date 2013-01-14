@@ -5,13 +5,12 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib,
-                  mongodb
+                  stdlib
                  ]},
   {mod, { crawler_app, [] }},
   {env, [
   	{persistence_cfg, [
-  		{max_cache_doc_size, 5}
+  		{max_cache_doc_size, 2000}
   	]},
   	{id_cfg, [   
 		{init_word_id, 1000},
