@@ -5,7 +5,25 @@
 	<projects>
 	</projects>
 	<buildSpec>
+		<buildCommand>
+			<name>org.erlide.core.erlbuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.erlide.core.builder.dialyzer</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
 	</buildSpec>
 	<natures>
+		<nature>org.erlide.core.erlnature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src</name>
+			<type>2</type>
+			<locationURI>PROJECT_LOC/apps/crawler_app/src</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>
