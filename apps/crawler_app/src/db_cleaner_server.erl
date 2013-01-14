@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_entry/3, set_bucket/2]).
+-export([start_link/1, set_bucket/2, add_index_to_delete/3]).
 -export([get_state/0]).
 
 %% ------------------------------------------------------------------
@@ -20,17 +20,16 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(CleanerCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, CleanerCfg, []).
+start_link(DbCleanerCfg) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, DbCleanerCfg, []).
 
-add_entry(BucketId, NewEntryUrlsIdsCnt, WordId) ->
-	%% NewEntryUrlsIdsCnt refers to the number of urls ids that will be deleted 
-	%% along with the index associated with the given word id.
-	gen_server:cast(?SERVER, {add_entry, BucketId, NewEntryUrlsIdsCnt, WordId}).
+set_bucket(BucketId, UrlIdCnt) ->
+	%% UrlIdCnt refers to the number of urls' ids that the bucket contains.
+	gen_server:cast(?SERVER, {set_bucket, BucketId, UrlIdCnt}).
 
-set_bucket(BucketId, UrlsIdsCnt) ->
-	%% UrlsIdsCnt refers to the number of urls ids that the bucket contains.
-	gen_server:cast(?SERVER, {set_bucket, BucketId, UrlsIdsCnt}).
+add_index_to_delete(BucketId, UrlIdListSize, WordId) ->
+	%% UrlIdListSize refers to number of urls' ids persited in the bucket for given word id.
+	gen_server:cast(?SERVER, {add_index_to_delete, BucketId, UrlIdListSize, WordId}).
 
 get_state() ->
 	gen_server:call(?SERVER, {get_state}).
@@ -39,9 +38,12 @@ get_state() ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(CleanerCfg) ->
-	process_flag(trap_exit, true),
-	State = CleanerCfg ++ [{cache_size, 0}, {cleaner_cache, []}],
+init(DbCleanerCfg) ->
+	[MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg] = DbCleanerCfg,
+    
+	%% cache hold the list of tuples of format: {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize}
+	%% size refers to summary sizes of WordIdList of each entry; it is the sum of WordIdListSize of each entry
+	State = {{cache, []}, {size, 0}, MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg},
     {ok, State}.
 
 
@@ -52,50 +54,39 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
-handle_cast({add_entry, BucketId, NewEntryUrlsIdsCnt, WordId}, State) ->
-	%% UrlsIdsCnt refers to all urls ids in associated with all words ids in the bucket.
-	%% UnusedUrlsIdsCnt indicates the number of all urls ids that are associated with words ids that are to be deleted.
-	{_BucketId, UrlsIdsCnt, UnusedUrlsIdsCnt, WordsIdsList, WordsCnt} = get_cache_entry(BucketId, State),
-	%% Cache size indicates words ids cnt. 
-	NewUnusedUrlsIdsCnt = UnusedUrlsIdsCnt + NewEntryUrlsIdsCnt,
-	case is_cache_for_bucket_ready_to_clean(UrlsIdsCnt, NewUnusedUrlsIdsCnt, State) of 
+handle_cast({set_bucket, BucketId, UrlIdCnt}, State) ->
+	UpdatedState = update_state({add_entry, BucketId, UrlIdCnt}, State),
+	{noreply, UpdatedState};
+
+handle_cast({add_index_to_delete, BucketId, UrlIdListSize, WordId}, State) ->
+	CacheEntry = get_cache_entry(BucketId, State),
+	case is_bucket_ready_to_clean(CacheEntry, UrlIdListSize, State) of
 		true ->
-			NewUrlsIdsCnt = UrlsIdsCnt - NewUnusedUrlsIdsCnt,
-			UpdatedState = update_cache_size(get_cache_size(State) - WordsCnt, State),
-			clean_indicies(BucketId, WordsIdsList ++ [WordId], NewUrlsIdsCnt),
-			if
-				NewUrlsIdsCnt == 0 ->
-					%% All the urls ids in the bucket has been cleaned.
-					UpdatedCache = delete_cache_entry(BucketId, UpdatedState),
-					{noreply, update_state(UpdatedCache, UpdatedState)};
-				
-				NewUrlsIdsCnt =/= 0 ->
-					%% There're still some urls ids in the bucket that weren't cleaned.
-					UpdatedCacheEntry = {BucketId, NewUrlsIdsCnt, 0, [], 0},
-					UpdatedCache = update_cache_entry(UpdatedCacheEntry, UpdatedState),
-					{noreply, update_state(UpdatedCache, UpdatedState)}
+			lager:debug("Bucket id: ~p is ready to clean.", [BucketId]),
+			WordIdListSize = get_cache_entry_value(word_id_list_size, CacheEntry),
+			case calculate_url_id_cnt(CacheEntry, UrlIdListSize) of
+				0 -> 
+					clean_indicies(BucketId, bucket_empty),
+					{noreply, update_state({delete_entry, BucketId, WordIdListSize}, State)};
+
+				NewUrlIdCnt ->
+					WordIdList = [WordId | get_cache_entry_value(word_id_list, CacheEntry) ],
+					clean_indicies(BucketId, {WordIdList, WordIdListSize + 1, NewUrlIdCnt}),
+					{noreply, update_state({reset_entry, BucketId, WordIdListSize, NewUrlIdCnt}, State)}
 			end;
-					
-		false ->	
-			UpdatedCacheEntry = {BucketId, UrlsIdsCnt, NewUnusedUrlsIdsCnt, WordsIdsList ++ [WordId], WordsCnt + 1},
-			UpdatedCache = update_cache_entry(UpdatedCacheEntry, State),
-			UpdatedState = update_cache_size(get_cache_size(State) + 1, State),
-			case is_cache_full(UpdatedState) of
-				true ->	
-					NewCache = clean_cache(UpdatedCache, []),
-					NewState = update_cache_size(0, UpdatedState),
-					{noreply, update_state(NewCache, NewState)};
-						
-				false ->	
-					{noreply, update_state(UpdatedCache, UpdatedState)}
+		
+		false ->
+			lager:debug("Bucket id: ~p is not ready to clean.", [BucketId]),
+			UpdatedState = update_state({update_entry, BucketId, UrlIdListSize, WordId}, State),
+			case is_cache_full(State) of
+				true ->
+					lager:debug("Cache is full."),
+					{noreply, update_state({clean_cache}, State)};
+				false ->
+					lager:debug("Cache is not full."),
+					{noreply, UpdatedState}
 			end
 	end;
-
-handle_cast({set_bucket, BucketId, UrlsIdsCnt}, State) ->
-	CacheEntry = {BucketId, UrlsIdsCnt, 0, [], 0},
-	UpdatedCache = add_new_cache_entry(CacheEntry, State),
-	UpdatedState = update_state(UpdatedCache, State),
-	{noreply, UpdatedState};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -106,7 +97,6 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	io:format("db_cleaner_server terminates...~n"),
 	ok;
 
 terminate(_Reason, _State) ->
@@ -119,65 +109,139 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-get_cache_entry(BucketId, [_, _, _, {cleaner_cache, Cache}]) ->
+
+%%
+%% Cache entry heleper functions.
+%%
+create_cache_entry(BucketId, UrlIdCnt) ->
+	UnusedUrlIdCnt = 0,
+	WordIdList = [],
+	WordIdListSize = 0,
+	{BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize}.
+
+
+get_cache_entry(BucketId, State) ->
+	Cache = get_state_value(cache, State),
 	lists:keyfind(BucketId, 1, Cache).
 
-get_cache_size(State) ->
-	{_, Size} = lists:keyfind(cache_size, 1, State),
-	Size.
 
-add_new_cache_entry(CacheEntry, [_, _, _, {cleaner_cache, Cache}]) ->
-	Cache ++ [CacheEntry].
+get_cache_entry_value(word_id_list, {_, _, _, WordIdList, _}) ->
+	WordIdList;
 
-update_cache_entry(UpdatedCacheEntry, [_, _, _, {cleaner_cache, Cache}]) ->
-	BucketId = element(1, UpdatedCacheEntry),
-	lists:keyreplace(BucketId, 1, Cache, UpdatedCacheEntry).
+get_cache_entry_value(word_id_list_size, {_, _, _, _, WordIdListSize}) ->
+	WordIdListSize.
+  
 
-delete_cache_entry(BucketId, [_, _, _, {cleaner_cache, Cache}]) ->
-	lists:keydelete(BucketId, 1, Cache).
+update_cache_entry(UrlIdListSize, WordId, CacheEntry) ->
+	{BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize} = CacheEntry,
+	{BucketId, UrlIdCnt, UnusedUrlIdCnt + UrlIdListSize, [WordId | WordIdList], WordIdListSize + 1}.
 
-update_cache_size(NewCacheSize, State) ->
-	lists:keyreplace(cache_size, 1, State, {cache_size, NewCacheSize}).
 
-update_state(UpdatedCache, State) ->
-	lists:keyreplace(cleaner_cache, 1, State, {cleaner_cache, UpdatedCache}).
+%%
+%% Higher level state handling functions.
+%%  
+update_state({add_entry, BucketId, UrlIdCnt}, State) ->
+	Cache = get_state_value(cache, State),
+	NewCacheEntry = create_cache_entry(BucketId, UrlIdCnt),
+	update_state_value({cache, [ NewCacheEntry | Cache ]}, State);
 
-clean_indicies(BucketId, WordsIdsList, NewBucketSize) ->
-	indexdb_server:delete_indicies(BucketId, WordsIdsList, NewBucketSize),
-	ok.
+update_state({delete_entry, BucketId, WordIdListSize}, State) ->
+	{Cache, Size} = get_state_value(cache_and_size, State),
+	UpdatedCache = lists:keydelete(BucketId, 1, Cache),
+	update_state_value({cache_and_size, UpdatedCache, Size - WordIdListSize}, State);
 
+update_state({reset_entry, BucketId, WordIdListSize, NewUrlIdCnt}, State) ->
+	{Cache, Size} = get_state_value(cache_and_size, State),
+	UpdatedCache = lists:keydelete(BucketId, 1, Cache),
+	NewCacheEntry = create_cache_entry(BucketId, NewUrlIdCnt),
+	update_state_value({cache_and_size, [ NewCacheEntry | UpdatedCache], Size - WordIdListSize}, State);
+
+update_state({update_entry, BucketId, UrlIdListSize, WordId}, State) ->
+	{Cache, Size} = get_state_value(cache_and_size, State),
+	CacheEntry = get_cache_entry(BucketId, State),
+	UpdatedCacheEntry = update_cache_entry(UrlIdListSize, WordId, CacheEntry),
+	UpdatedCache = lists:keyreplace(BucketId, 1, Cache, UpdatedCacheEntry),
+	update_state_value({cache_and_size, UpdatedCache, Size + 1}, State);
+
+update_state({clean_cache}, State) ->
+	Cache = get_state_value(cache, State),
+	UpdatedCache = clean_cache(Cache, []),
+	update_state_value({cache_and_size, UpdatedCache, 0}, State).
+	
+
+%%	
+%% Cleaning helper functions.	
+%%	
+clean_indicies(BucketId, bucket_empty) ->
+	indexdb_server:delete_bucket(BucketId);
+
+clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}) ->
+	WordCntDiff = - WordIdListSize,
+	indexdb_server:delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlIdCnt).
+	
+	
 clean_cache([], UpdatedCache) ->
 	UpdatedCache;
-clean_cache([ {BucketId, UrlsIdsCnt, UnusedUrlsIdsCnt, WordsIdsList, _WordsCnt} | T ], UpdatedCache) ->
-	NewUrlsIdsCnt = UrlsIdsCnt - UnusedUrlsIdsCnt,
-	clean_indicies(BucketId, WordsIdsList, NewUrlsIdsCnt),
-	clean_cache(T, [ {BucketId, NewUrlsIdsCnt, 0, [], 0} | UpdatedCache ]).
-	
-	
 
-is_cache_for_bucket_ready_to_clean(UrlsIdsCnt, UnusedUrlsIdsCnt, State) ->
-	MaxPercentage = get_max_percentage_of_unused_bucket_indicies(State),
-	if 
-		(UnusedUrlsIdsCnt / UrlsIdsCnt) * 100 >= MaxPercentage ->
+clean_cache([ {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize} | T ], UpdatedCache) ->
+	NewUrlIdCnt = UrlIdCnt - UnusedUrlIdCnt,
+	clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}),
+	clean_cache(T, [ {BucketId, NewUrlIdCnt, 0, [], 0} | UpdatedCache ]).
+
+
+%%
+%% Calculation helper functions.
+%%
+calculate_url_id_cnt({_, UrlIdCnt, UnusedUrlIdCnt, _, _}, UrlIdListSize) ->
+	%% Calculate new size of the bucket after cleaning.
+	UrlIdCnt - (UnusedUrlIdCnt + UrlIdListSize).
+
+
+is_bucket_ready_to_clean({_, UrlIdCnt, UnusedUrlIdCnt, _, _}, UrlIdListSize, State) ->
+	%% UrlIdListSize referes to the number of urls' ids in the index to be deleted.
+	UnusedUrlIdRatio = get_state_value(unused_url_id_ratio, State),
+	if
+		((UnusedUrlIdCnt + UrlIdListSize) / UrlIdCnt) * 100 >= UnusedUrlIdRatio ->
 			true;
 		true ->
 			false
 	end.
+
 
 is_cache_full(State) ->
-	CacheSize = get_cache_size(State),
-	MaxCacheSize = get_max_number_of_indicies_in_cache(State),
+	MaxSize = get_state_value(max_size, State),
+	Size = get_state_value(size, State),
 	if
-		CacheSize == MaxCacheSize ->
+		Size == MaxSize ->
 			true;
 		true ->
 			false
-
 	end.
-get_max_percentage_of_unused_bucket_indicies(State) ->
-	{_, Value} = lists:keyfind(max_percentage_of_unused_bucket_indicies, 1, State),
+
+%%
+%% State handling helper functions.
+%%
+get_state_value(cache_and_size, {{cache, Cache}, {size, Size}, _, _}) ->
+	{Cache, Size};
+
+get_state_value(cache, {{cache, Cache}, _, _, _}) ->
+	Cache;
+
+get_state_value(size, {_, {size, Size}, _, _}) ->
+	Size;
+
+get_state_value(max_size, {_, _, {max_word_id_cnt, Value}, _}) ->
+	Value;
+
+get_state_value(unused_url_id_ratio, {_, _, _, {max_unused_url_id_cnt_percentage, Value}}) ->
 	Value.
 
-get_max_number_of_indicies_in_cache(State) ->
-	{_, Value} = lists:keyfind(max_number_of_indicies_in_cache, 1, State),
-	Value.
+
+update_state_value({cache_and_size, NewCache, NewSize}, {_, _, Cfg1, Cfg2}) ->
+	lager:debug("Cache updated: ~w; cache size updated: ~p", [NewCache, NewSize]),
+	{{cache, NewCache}, {size, NewSize}, Cfg1, Cfg2};
+
+update_state_value({cache, NewCache}, {_, Size, Cfg1, Cfg2}) ->
+	lager:debug("Cache updated: ~w", [NewCache]),
+	{{cache, NewCache}, Size, Cfg1, Cfg2}.
+

@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, get_id/0]).
+-export([start_link/1, get_word_id/0, get_bucket_id/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -19,22 +19,37 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(InitialID) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, InitialID, []).
+start_link(IdCfg) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, IdCfg, []).
 
-get_id() ->
-	gen_server:call(?SERVER, get_id).
+get_word_id() ->
+	gen_server:call(?SERVER, get_word_id).
+
+get_bucket_id() ->
+	gen_server:call(?SERVER, get_bucket_id).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(InitialID) ->
-	process_flag(trap_exit, true),
-    {ok, InitialID}.
+init(IdCfg) ->
+	[   
+	 	{init_word_id, WordId},
+		{init_bucket_id, BucketId}
+	] = IdCfg,
+	%% The state always holds the ids that will be returned in the next calls to 
+	%% either get_word_id/0 or get_bucket_id/0.
+	State = {WordId, BucketId},
+    {ok, State}.
 
-handle_call(get_id, _From, CurrentID) ->
-	{reply, CurrentID, CurrentID + 1};
+handle_call(get_word_id, _From, {WordId, _BucketId}) ->
+	lager:debug("Word id returned: ~p", [WordId]),
+	{reply, {ok, WordId}, {WordId + 1, _BucketId}};
+
+handle_call(get_bucket_id, _From, {_WordId, BucketId}) ->
+	lager:debug("Bucket id returned: ~p", [BucketId]),
+	{reply, {ok, BucketId}, {_WordId, BucketId + 1}};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -47,7 +62,6 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	io:format("id_server terminates...~n"),
 	ok;
 terminate(_Reason, _State) ->
     ok.

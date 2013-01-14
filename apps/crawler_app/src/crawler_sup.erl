@@ -28,31 +28,27 @@ init(_StartArgs) ->
 	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
 	
 	%% Set id server.
-	{ok, InitialID} = application:get_env(initial_id),
-	IdServerSpec = ?CHILD(id_server, worker, InitialID, 2000),
-	lager:info("Id server started."),
+	{ok, IdCfg} = application:get_env(id_cfg),
+	IdServerSpec = ?CHILD(id_server, worker, IdCfg, 2000),
 	
-	%% Set Words and Index Db servers.
-	{ok, DbCfg} = application:get_env(db_cfg),
-	WordsDbServerSpec = ?CHILD(wordsdb_server, worker, DbCfg, 2000),
-	IndexDbServerSpec = ?CHILD(indexdb_server, worker, DbCfg, 2000),
-	lager:info("WordsDb and IndexDb servers started."),
+	%% Set word db server.
+	{ok, WordDbCfg} = application:get_env(word_db_cfg),
+	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, 2000),
+	
+	%% Set index db server.
+	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
+	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, 2000),
 
 	%% Set db cleaner server.
 	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
 	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, 2000),
-	lager:info("Cleaner server started."),
 	
 	%% Set cache server.
 	{ok, CacheServerCfg} = application:get_env(cache_cfg),
 	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, 2000),
-	lager:info("Cache server started."),
 	
     ChildrenSpecs = [ PersistenceServerSpec, IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec ],
     RestartStrategy = { one_for_one , 0, 1},
-	lager:critical("Test critital log"),
-	lager:debug("Test debug log"),
-	lager:notice("Test notice log"),
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 
 

@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/5	, retrieve_index/1, retrieve_old_indicies/0]).
+-export([start_link/1, add_index/1	, retrieve_index/1, retrieve_old_indicies/0]).
 -export([get_state/0]).
 
 %% ------------------------------------------------------------------
@@ -23,8 +23,8 @@
 start_link(CacheCfg) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, CacheCfg, []).
 
-add_index(WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket) ->
-	gen_server:call(?SERVER, {add_index, WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket}).
+add_index(CacheDoc) ->
+	gen_server:call(?SERVER, {add_index, CacheDoc}).
 
 retrieve_index(WordId) ->
 	gen_server:call(?SERVER, {retrieve_index, WordId}).
@@ -40,36 +40,36 @@ get_state() ->
 %% ------------------------------------------------------------------
 
 init(CacheCfg) ->
-	process_flag(trap_exit, true),
-	State = CacheCfg ++ [{cache_size, 0}, {cache, []}, {recently_retrieved_index_size, none}],
+	[PercentageToFlushCfg, MaxCacheSizeCfg] = CacheCfg,
+	State = {{cache, []}, {size, 0}, PercentageToFlushCfg, MaxCacheSizeCfg},
     {ok, State}.
 
 
-handle_call({add_index, WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket}, _From, State) ->
-	IndexDoc = create_index_doc(WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket),
-	TmpState = update_state({add_index, IndexDoc}, State),
-	UpdatedState = update_state({increase_size, UrlsIdsListSize}, TmpState),
+handle_call({add_index, CacheDoc}, _From, State) ->
+	UpdatedState = update_state({add_index, CacheDoc}, State),
 	case is_cache_full(UpdatedState) of
-		false -> {reply, {ok, cache_ok}, UpdatedState};
-		true -> {reply, {ok, cache_full}, UpdatedState}
+		false -> 
+			{reply, ok, UpdatedState};
+		true ->
+			lager:debug("After adding cache doc: ~w the cache sie full.", [CacheDoc]),
+			{reply, {ok, full}, UpdatedState}
 	end;
 
 handle_call({retrieve_index, WordId}, _From, State) ->
-	{RetrievedIndex, TmpState} = update_state({retrieve_index, WordId}, State),
-	%% We don't change cache size as we know that the index will be returned to the cache; with new url_id 
-	%% or without.
-	UpdatedState = update_state({set_recently_retrieved_index_size, RetrievedIndex}, TmpState),
-	case RetrievedIndex of
-		{} -> 	{reply, {ok, index_not_found}, UpdatedState};
-		_ ->	{reply, {ok, RetrievedIndex}, UpdatedState}
+	{CacheDoc, UpdatedState} = update_state({retrieve_index, WordId}, State),
+	case CacheDoc of
+		{} -> 	
+			{reply, {ok, index_not_found}, UpdatedState};
+		_ ->	
+			{reply, {ok, CacheDoc}, UpdatedState}
 	end;
 
 handle_call({retrieve_old_indicies}, _From, State) ->
-	%% We count how much urls ids we want to retrieve as cache size refers url's ids from the indicies.
-	RemainingUrlsIdsCount = calculate_remaining_urls_ids_count(State),
-	{RetrievedOldIndices, TmpState, NewCacheSize} = update_state({retrieve_old_indicies, RemainingUrlsIdsCount}, State),
-	UpdatedState = update_state({set_size, NewCacheSize}, TmpState),
-	{reply, {ok, RetrievedOldIndices}, UpdatedState};
+	%% We count how much urls ids we want to retrieve.
+	RemainingUrlIdCount = calculate_remaining_url_id_count(State),
+	lager:debug("Calculated count of remaning url ids: ~p", [RemainingUrlIdCount]),
+	{CacheDocList, UpdatedState} = update_state({retrieve_old_indicies, RemainingUrlIdCount}, State),
+	{reply, {ok, CacheDocList}, UpdatedState};
 
 handle_call({get_state}, _From, State) ->
 	{reply, State, State};
@@ -86,7 +86,6 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	io:format("cache_server terminates...~n"),
 	ok;
 
 terminate(_Reason, _State) ->
@@ -100,112 +99,112 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-create_index_doc(WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket) ->
-	{WordId, UrlsIdsList, UrlsIdsListSize, BucketId, IndexSizeInBucket}.
 
+%%
+%% Higher level state handling functions.
+%%
+update_state({add_index, CacheDoc}, State) ->
+	{_, _, UrlIdListSize, _, _} = CacheDoc,
+	{Cache, Size} = get_state_value(cache_and_size, State),
+	lager:debug("New cache doc created: ~w; new size is: ~p", [CacheDoc, Size + UrlIdListSize]),
+	update_state_value({cache_and_size, [ CacheDoc | Cache ], Size + UrlIdListSize}, State);
 
-calculate_remaining_urls_ids_count(State) ->
-	CacheSize = get_state_property(cache_size, State),
-	PercentageToFlush = get_state_property(percentage_to_flush, State),
-	CacheSize - (CacheSize * PercentageToFlush) / 100.	
-  
-
-update_state({add_index, IndexDoc}, State) ->
-	Cache = get_state_property(cache, State),
-	set_state_property({cache, [ IndexDoc | Cache ]}, State);
-update_state({increase_size, UrlsIdsListSize}, State) ->
-	case get_state_property(recently_retrieved_index_size, State) of
-		none ->				%% We didn't retrieved any index recently
-							OldSize = get_state_property(cache_size, State),
-							set_state_property({cache_size, OldSize + UrlsIdsListSize}, State);
-		
-		OldIndexSize ->		%% We previously retrieved the index and we wrote down its size
-							if
-								OldIndexSize /= UrlsIdsListSize ->	
-									OldSize = get_state_property(cache_size, State),
-									IndexSizeDiff = UrlsIdsListSize - OldIndexSize,
-									set_state_property({cache_size, OldSize + IndexSizeDiff}, State);
-								true -> 							
-									State
-							end
-	end;
-update_state({set_size, NewCacheSize}, State) ->
-	set_state_property({cache_size, NewCacheSize}, State);
 update_state({retrieve_index, WordId}, State) ->
-	Cache = get_state_property(cache, State),
-	{RetrievedIndex, UpdatedCache} = update_cache({retrieve_index, WordId, []}, Cache),
-	UpdatedState = set_state_property({cache, UpdatedCache}, State),
-	{RetrievedIndex, UpdatedState};
-update_state({set_recently_retrieved_index_size, RetrievedIndex}, State) ->
-	case RetrievedIndex of
-		{} ->	set_state_property({set_recently_retrieved_index_size, none}, State);
-		_ ->	IndexSize = element(3, RetrievedIndex),
-				set_state_property({set_recently_retrieved_index_size, IndexSize}, State)
+	{Cache, Size} = get_state_value(cache_and_size, State),
+	{CacheDoc, UpdatedCache} = update_cache({retrieve_index, WordId, []}, Cache),
+	case CacheDoc of
+		{_, _, UrlIdListSize, _, _} ->
+			lager:debug("Cache doc retrieved: ~w; new size is: ~p", [CacheDoc, Size - UrlIdListSize]),
+			{CacheDoc, update_state_value({cache_and_size, UpdatedCache, Size - UrlIdListSize}, State)};
+		
+		{} ->
+			{{}, State}
 	end;
-update_state({retrieve_old_indicies, RemainingUrlsIdsCount}, State) ->
-	Cache = get_state_property(cache, State),
-	{RetrievedIndicies, UpdatedCache, UpdatedCacheSize} = update_cache({retrieve_old_indicies, RemainingUrlsIdsCount, 0, []}, Cache),
-	UpdatedState = set_state_property({cache, UpdatedCache}, State),
-	{RetrievedIndicies, UpdatedState, UpdatedCacheSize}.
-	
-	
-	
-get_state_property(cache, State) ->
-	{_, Cache} = lists:keyfind(cache, 1, State),
-	Cache;
-get_state_property(cache_size, State) ->
-	{_, Size} = lists:keyfind(cache_size, 1, State),
-	Size;
-get_state_property(cache_max_size, State) ->
-	{_, CacheMaxSize} = lists:keyfind(max_number_of_words_ids_in_cache, 1, State),
-	CacheMaxSize;
-get_state_property(recently_retrieved_index_size, State) ->
-	{_, IndexSize} = lists:keyfind(recently_retrieved_index_size, 1, State),
-	IndexSize;
-get_state_property(percentage_to_flush, State) ->
-	{_, PercentageToFlush} = lists:keyfind(percentage_of_cache_to_flush, 1, State),
-	PercentageToFlush.
 
+update_state({retrieve_old_indicies, RemainingUrlIdCount}, State) ->
+	Cache = get_state_value(cache, State),
+	{CacheDocList, UpdatedCache, Size} = update_cache({retrieve_old_indicies, RemainingUrlIdCount, 0, []}, Cache),
+	lager:debug("Old indicies retrieved: ~w; new size is: ~p", [CacheDocList, Size]),
+	{CacheDocList, update_state_value({cache_and_size, UpdatedCache, Size}, State)}.
 
-set_state_property({cache, Cache}, State) ->
-	lists:keyreplace(cache, 1, State, {cache, Cache});
-set_state_property({cache_size, Size}, State) ->
-	lists:keyreplace(cache_size, 1, State, {cache_size, Size});
-set_state_property({set_recently_retrieved_index_size, IndexSize}, State) ->
-	lists:keyreplace(recently_retrieved_index_size, 1, State, {recently_retrieved_index_size, IndexSize}).
 	
-
-update_cache({retrieve_index, _WoridId, ProcessedCache}, []) ->
+%%
+%% Cache handling helper functions.
+%%
+update_cache({retrieve_index, _, ProcessedCache}, []) ->
 	{{}, ProcessedCache};
-update_cache({retrieve_index, WordId, ProcessedCache}, [ ExaminedIndex | RemainingCache ]) ->
-	case is_cache_entry_for_word_id(WordId, ExaminedIndex) of 
-		true ->		{ExaminedIndex, ProcessedCache ++ RemainingCache};
-		false -> 	update_cache({retrieve_index, WordId, ProcessedCache ++ [ExaminedIndex]}, RemainingCache)
+
+update_cache({retrieve_index, WordId, ProcessedCache}, [ CacheDoc | Cache ]) ->
+	case is_cache_doc_for_word_id(WordId, CacheDoc) of 
+		true ->		
+			{CacheDoc, ProcessedCache ++ Cache};
+		false -> 	
+			update_cache({retrieve_index, WordId, ProcessedCache ++ [CacheDoc]}, Cache)
 	end;
-update_cache({retrieve_old_indicies, RemainingUrlsIdsCount, ProccessedUrlsIdsCount, ProcessedCache}, [ ExaminedIndex | RemainingCache ]) ->
-	ExaminedIndexSize = element(3, ExaminedIndex),
+
+update_cache({retrieve_old_indicies, RemainingUrlIdCount, ProccessedUrlIdCnt, ProcessedCache}, [CacheDoc | Cache]) ->
+	{_, _, UrlIdListSize, _, _} = CacheDoc,
 	if
-		ExaminedIndexSize + ProccessedUrlsIdsCount > RemainingUrlsIdsCount ->
-			{[ExaminedIndex] ++ RemainingCache, ProcessedCache, ProccessedUrlsIdsCount};
+		UrlIdListSize + ProccessedUrlIdCnt > RemainingUrlIdCount ->
+			{[CacheDoc] ++ Cache, ProcessedCache, ProccessedUrlIdCnt};
 		true ->
-			update_cache({retrieve_old_indicies, RemainingUrlsIdsCount, ProccessedUrlsIdsCount + ExaminedIndexSize, ProcessedCache ++ [ExaminedIndex]}, RemainingCache)			
+			update_cache({retrieve_old_indicies, RemainingUrlIdCount, ProccessedUrlIdCnt + UrlIdListSize, ProcessedCache ++ [CacheDoc]}, Cache)
 	end.
 
+
+%%
+%% Calculation helper functions.
+%%
+calculate_remaining_url_id_count(State) ->
+	Size = get_state_value(size, State),
+	PercentageToFlush = get_state_value(percentage_to_flush, State),
+	Size - (Size * PercentageToFlush) div 100.	
+
+
 is_cache_full(State) ->
-	CacheSize = get_state_property(cache_size, State),
-	CacheMaxSize = get_state_property(cache_max_size, State),
+	Size = get_state_value(size, State),
+	MaxSize = get_state_value(max_size, State),
 	if
-		CacheSize >= CacheMaxSize ->
+		Size >= MaxSize ->
 			true;
 		true ->
 			false
 	end.
 
-is_cache_entry_for_word_id(WordId, ExaminedIndex) ->
-	ExaminedWordId = element(1, ExaminedIndex),
+
+is_cache_doc_for_word_id(WordId, {ExaminedWordId, _, _, _, _}) ->
 	if
 		WordId == ExaminedWordId ->
 			true;
 		true ->
 			false
 	end.
+
+
+%%
+%% State handling helper functions.
+%%
+get_state_value(cache_and_size, {{cache, Cache}, {size, Size}, _, _}) ->
+	{Cache, Size};
+
+get_state_value(cache, {{cache, Cache}, _, _, _}) ->
+	Cache;
+
+get_state_value(size, {_, {size, Size}, _, _}) ->
+	Size;
+
+get_state_value(max_size, {_, _, _, {max_cache_size, Value}}) ->
+	Value;
+
+get_state_value(percentage_to_flush, {_, _, {percentage_to_flush, Value}, _}) ->
+	Value.
+
+
+update_state_value({cache_and_size, Cache, Size}, {_, _, Cfg1, Cfg2}) ->
+	{{cache, Cache}, {size, Size}, Cfg1, Cfg2};
+	
+update_state_value({cache, Cache}, {_, SizeCfg, Cfg1, Cfg2}) ->
+	{{cache, Cache}, SizeCfg, Cfg1, Cfg2};
+
+update_state_value({size, Size}, {CacheCfg, _, Cfg1, Cfg2}) ->
+	{{cache, CacheCfg}, {size, Size}, Cfg1, Cfg2}. 

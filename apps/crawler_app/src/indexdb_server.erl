@@ -6,9 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_indicies/3, get_index/2, delete_indicies/3]).
-%%% API for testing
--export([newformat_save_indicies/0, newformat_get_index/0, newformat_delete_indicies/0]).
+-export([start_link/1, save_indicies/4, get_index/2, delete_indicies/4, delete_bucket/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -21,145 +19,60 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(DbCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, DbCfg, []).
+start_link(IndexDbCfg) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, IndexDbCfg, []).
 
-add_indicies(IndiciesList, IndiciesListSize, NewBucketId) ->
-	gen_server:cast(?SERVER, {add_indicies, IndiciesList, IndiciesListSize, NewBucketId}).
+save_indicies(BucketId, WordCnt, UrlCnt, IncompleCacheDocList) ->
+	gen_server:cast(?SERVER, {save_indicies, BucketId, WordCnt, UrlCnt, IncompleCacheDocList}).
 
 get_index(BucketId, WordId) ->
 	gen_server:call(?SERVER, {get_index, BucketId, WordId}).
 
-delete_indicies(BucketId, WordsIdsList, NewBucketSize) ->
-	gen_server:cast(?SERVER, {delete_indicies, BucketId, WordsIdsList, NewBucketSize}).
+delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
+	gen_server:cast(?SERVER, {delete_indicies, BucketId, WordIdList, WordCntDiff, NewUrlCnt}).
 
-newformat_save_indicies() ->
-	gen_server:cast(?SERVER, {test_save_indicies}).
+delete_bucket(BucketId) ->
+	gen_server:cast(?SERVER, {delete_bucket, BucketId}).
 
-newformat_delete_indicies() ->
-	gen_server:cast(?SERVER, {test_delete_indicies}).
-
-newformat_get_index() ->
-	gen_server:call(?SERVER, {test_get_index}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(DbCfg) ->
-	process_flag(trap_exit, true),
+init(IndexDbCfg) ->
 	[
   		{conn_cfg, ConnCfg},
-  		{storage_cfg, StorageCfg},
-		_InitialBucketIdCfg
-  	] = DbCfg,
+  		{db, DbName},
+		{coll, CollName}
+  	] = IndexDbCfg,
 	{ok, Conn} = mongo:connect(ConnCfg),
 	State = {
-			 	{connection, Conn},
-				{storage_cfg, StorageCfg}
+				{coll, CollName},
+				{db, DbName},
+				{conn, Conn}
 			 },
     {ok, State}.
 
 
 handle_call({get_index, BucketId, WordId}, _From, State) ->
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	Reply = get_index(BucketId, WordId, DbName, CollName, Conn),
+	Reply = get_index(BucketId, WordId, State),
 	{reply, Reply, State};
-
-%%%
-%%% Tests for new data format
-%%%
-handle_call({test_get_index}, _From, State) ->
-	%% Set config.
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	
-	%% Prepare action; 100 indicates word id
-	SelectorDoc = {'_id', 55}, 
-	ProjectionDoc = {indicies, 1, '_id', 0},
-	FindAction = fun() ->
-						 mongo:find_one(CollName, SelectorDoc, ProjectionDoc)
-				 end,
-	
-	%% Perform action and find index for word id == 100
-	WordId = 100,
-	{ok, {{indicies, IndexDocList}}} = perform_mongo_action(FindAction, DbName, Conn),
-	Index = lists:keyfind(WordId, 2, IndexDocList),
-	{reply, Index, State};
-	
-%%%
-
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
-handle_cast({add_indicies, IndiciesList, IndiciesListSize, NewBucketId}, State) ->
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	add_indicies(IndiciesList, IndiciesListSize, NewBucketId, DbName, CollName, Conn),
+handle_cast({save_indicies, BucketId, WordCnt, UrlCnt, IncompleCacheDocList}, State) ->
+	save_indicies(BucketId, WordCnt, UrlCnt, IncompleCacheDocList, State),
 	{noreply, State};
 
-handle_cast({delete_indicies, BucketId, WordsIdsList, NewBucketSize}, State) ->
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	delete_indicies(BucketId, WordsIdsList, NewBucketSize, DbName, CollName, Conn),
+handle_cast({delete_indicies, BucketId, WordIdList, WordCntDiff, NewUrlCnt}, State) ->
+	delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt, State),
 	{noreply, State};
 
-%%%
-%%% Tests for new data format
-%%%
-handle_cast({test_save_indicies}, State) ->
-	%%% Get config.
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	
-	%% Prepare indicies.
-	Indicies = [
-					%% New format of index is: {word_id :  WordId, data:  [[UrlId, UrlId, ..., UrlId], UrlIdListSize] }
-					{'word_id', 100, data, [[1001, 1002, 1003], 3] },
-					{'word_id', 200, data, [[2001, 2002], 2] }
-				],
-	
-	%% Prepare bucket
-	Bucket = {'_id', 55, word_cnt, 2, url_cnt, 5, indicies, Indicies},
-	
-	%% Save bucket.
-	InsertAction = create_mongo_action(insert, CollName, Bucket, {}),
-	perform_mongo_action(InsertAction, DbName, Conn),
-	
-	%% Return
+handle_cast({delete_bucket, BucketId}, State) ->
+	delete_bucket(BucketId, State),
 	{noreply, State};
-
-
-handle_cast({test_delete_indicies}, State) ->
-	%%% Get config.
-	Conn = retrieve_connection(State),
-	DbName = retrieve_database_name(State),
-	CollName = retrieve_collection_name(State),
-	
-	%% Prepare action.
-	BucketId = 55,
-	WordIdList = [ 100 ],
-	SelectorDoc = {'_id', BucketId},
-	ModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordIdList} } } },
-	ModifyAction = fun () ->
-							mongo:modify(CollName, SelectorDoc, ModifierDoc)
-				   end,
-	
-	%% Perform action.
-	perform_mongo_action(ModifyAction, DbName, Conn),
-	
-	{noreply, State};
-	
-	
-%%%
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -170,8 +83,7 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, State) ->
-	io:format("indexdb_server terminates...~n"),
-	{ {connection, Conn}, _StorageCfg } = State,
+	{_, _, Conn} = retrieve_collname_dbname_conn(State),
 	mongo:disconnect(Conn),
 	ok;
 
@@ -186,103 +98,83 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-add_indicies(IndiciesList, IndiciesListSize, NewBucketId, DbName, CollName, Conn) ->
-	BucketDoc = {'_id', NewBucketId, bucket_size, IndiciesListSize, indicies, IndiciesList},
-	InserAction = create_mongo_action(insert, CollName, BucketDoc, {}),
-	perform_mongo_action(InserAction, DbName, Conn).
+save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, State) ->
+	DbIndexDocList = convert_incomplete_cache_docs_to_db_index_docs(IncompleteCacheDocList, []),
+	DbBucketDoc = {'_id', BucketId, word_cnt, WordCnt, url_cnt, UrlCnt, indicies, DbIndexDocList},
+	{CollName, DbName, Conn} = retrieve_collname_dbname_conn(State),
+	db_helper:perform_action({insert, DbBucketDoc}, CollName, DbName, Conn),
+	lager:debug("Db bucket doc saved: ~p", [DbBucketDoc]).
 
-get_index(BucketId, WordId, DbName, CollName, Conn) ->
-	FindDoc = {'_id', BucketId},
-	FindAction = create_mongo_action(find, CollName, FindDoc, {}),
-	{ok, Cursor} = perform_mongo_action(FindAction, DbName, Conn),
-	case mongo:rest(Cursor) of
-		[] -> 			{ok, no_bucket};
-		[ Doc ] -> 		{IndiciesList} = bson:lookup(indicies, Doc),
-						case lists:keyfind(WordId, 2, IndiciesList) of
-							false ->
-								{ok, no_entry_for_word};
-							Index ->
-								{ok, Index}
-						end;
-		[ _H | _T] -> 	{error, multiple_entries}
+
+get_index(BucketId, WordId, State) ->
+	SelectorDoc = {'_id', BucketId}, 
+	ProjectionDoc = {indicies, 1, '_id', 0},
+	{CollName, DbName, Conn} = retrieve_collname_dbname_conn(State),
+	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn) of
+		{ok, {{indicies, DbIndexDocList}}} ->
+			case lists:keyfind(WordId, 2, DbIndexDocList) of
+				false -> 
+					lager:debug("Now word id: ~p in bucket id: ~p.", [WordId, BucketId]),
+					{ok, no_word};
+				DbIndexDoc ->
+					IncompleteCacheDoc = convert_db_doc_to_incomplete_cache_doc(DbIndexDoc),
+					lager:debug("Incomplete cache doc returned: ~p", [IncompleteCacheDoc]),
+					IncompleteCacheDoc
+			end;
+
+		{ok, {}} ->
+			lager:debug("No bucket id: ~p", [BucketId]),
+			{ok, no_bucket}
 	end.
-
-delete_indicies(BucketId, WordsIdsList, NewBucketSize,  DbName, CollName, Conn) ->
+	
+	
+	
+delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt, State) ->
 	SelectorDoc = {'_id', BucketId},
+	{CollName, DbName, Conn} = retrieve_collname_dbname_conn(State),
 	
-	case NewBucketSize of
-		0 ->	DeleteBucketAction = create_mongo_action(delete, CollName, SelectorDoc, {}),
-				perform_mongo_action(DeleteBucketAction, DbName, Conn);
-				
-		_ ->	IndiciesModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordsIdsList} } } },
-				IndiciesModifyAction = create_mongo_action(modify, CollName, IndiciesModifierDoc, SelectorDoc),
-				perform_mongo_action(IndiciesModifyAction, DbName, Conn),
+	%% Delete from given bucket those entries that are related to word's ids 
+	%% contained on the WordIdList. 
+	IndiciesModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordIdList}}}},
+	db_helper:perform_action({modify, SelectorDoc, IndiciesModifierDoc}, CollName, DbName, Conn),
+	lager:debug("From bucket id: ~w db index docs deleted: ~w", [BucketId, WordIdList]),
 	
-				BucketSizeModifierDoc = { bson:utf8("$set"), {bucket_size, NewBucketSize} },
-				BucketSizeModifyAction = create_mongo_action(modify, CollName, BucketSizeModifierDoc, SelectorDoc),
-				perform_mongo_action(BucketSizeModifyAction, DbName, Conn)
-	end.
+	%% Update words' ids counter.
+	WordCntModifierDoc = { bson:utf8("$inc"), {word_cnt, WordCntDiff} },
+	db_helper:perform_action({modify, SelectorDoc, WordCntModifierDoc}, CollName, DbName, Conn),
+	lager:debug("Bucket id: ~w updated with new word diff: ~p", [BucketId, WordCntDiff]),
+
+	%% Update urls' ids counter.
+	UrlCntModifierDoc = { bson:utf8("$set"), {url_cnt, NewUrlCnt} },
+	db_helper:perform_action({modify, SelectorDoc, UrlCntModifierDoc}, CollName, DbName, Conn),
+	lager:debug("Bucket id: ~w updated with new url cnt: ~p", [BucketId, NewUrlCnt]).
+
+
+delete_bucket(BucketId, State) ->
+	SelectorDoc = {'_id', BucketId},
+	{CollName, DbName, Conn} = retrieve_collname_dbname_conn(State),
+	db_helper:perform_action({delete, SelectorDoc}, CollName, DbName, Conn),
+	lager:debug("Bucket id: ~p deleted from db.", [BucketId]).
 
 %%
-%% Common helper functions.
+%% Data handling herlper functions.
 %%
-
-create_mongo_action(ActionName, Collection, BsonDocument, {}) ->
-	case ActionName of
-		find	->	Action = fun() ->
-						mongo:find(Collection, BsonDocument)
-			 		end,
-					Action;
-		delete	-> Action = fun() ->
-						mongo:delete(Collection, BsonDocument)
-					end,
-				   	Action;
-		insert	->  Action = fun() ->
-						mongo:insert(Collection, BsonDocument)
-					end,
-					Action
-	end;
-create_mongo_action(ActionName, Collection, BsonDocument, SelectorDoc) ->
-	case ActionName of
-			replace	-> Action = fun() ->
-						mongo:replace(Collection, SelectorDoc, BsonDocument)
-					end,
-				   	Action;
-			modify -> Action = fun() ->
-						% BsonDocument is modifier in this case
-						mongo:modify(Collection, SelectorDoc, BsonDocument)
-			end,
-			Action
-	end.
+convert_incomplete_cache_docs_to_db_index_docs([], DbIndexDocList) ->
+	DbIndexDocList;
+convert_incomplete_cache_docs_to_db_index_docs([ IncompleteCacheDoc | IncompleteCacheDocList], DbIndexDocList) ->
+	{WordId, UrlIdList, UrlIdListSize} = IncompleteCacheDoc,
+	DbIndexDoc = {word_id, WordId, data, [UrlIdList, UrlIdListSize]},
+	convert_incomplete_cache_docs_to_db_index_docs(IncompleteCacheDocList, DbIndexDocList ++ [DbIndexDoc]).
 
 
-perform_mongo_action(Action, DbName, Conn) ->
-	%Set config.
-	WriteMode = safe,
-	ReadMode = master,
-	
-	%Perform action.
-	Result =  mongo:do(WriteMode, ReadMode, Conn, DbName, Action),
+convert_db_doc_to_incomplete_cache_doc(DbIndexDoc) ->
+	{word_id, WordId, data, [UrlIdList, UrlIdListSize]} = DbIndexDoc,
+	{WordId, UrlIdList, UrlIdListSize}.
 
-	%Return result.
-	Result.
 
-retrieve_connection(State) ->
-	{ {connection, Conn}, _StorageCfg } = State,
-	Conn.
-
-retrieve_database_name(State) ->
-	{ _ConnCfg, {storage_cfg, [
-						_WordsCfg,
-						{index, {DbName, _}} 
-					   ]}
-	} = State,
-	DbName.
-
-retrieve_collection_name(State) ->
-	{ _ConnCfg, {storage_cfg, [
-						_WordsCfg,
-						{index, {_, CollectionName}} 
-					   ]}
-	} = State,
-	CollectionName.
+%%
+%% State handling helper functions.
+%%
+retrieve_collname_dbname_conn(State) ->
+	{{coll, CollName}, {db, DbName}, {conn, Conn}} = State,
+	{CollName, DbName, Conn}.		
