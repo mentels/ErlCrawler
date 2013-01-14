@@ -1,4 +1,4 @@
-{application, crawler_app,
+{application, crawler,
  [
   {description, ""},
   {vsn, "1"},
