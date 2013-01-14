@@ -119,7 +119,7 @@ get_index(BucketId, WordId, State) ->
 				DbIndexDoc ->
 					IncompleteCacheDoc = convert_db_doc_to_incomplete_cache_doc(DbIndexDoc),
 					lager:debug("Incomplete cache doc returned: ~p", [IncompleteCacheDoc]),
-					IncompleteCacheDoc
+					{ok, IncompleteCacheDoc}
 			end;
 
 		{ok, {}} ->
