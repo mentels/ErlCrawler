@@ -7,7 +7,7 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { crawler_persistence_app, [] }},
+  {mod, { crawler_persistence, [] }},
   {env, [
   	{persistence_cfg, [
   		{max_cache_doc_size, 2000}
