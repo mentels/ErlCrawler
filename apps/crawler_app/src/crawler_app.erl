@@ -10,6 +10,7 @@
 %% ===================================================================
 
 start(_StartType, StartArgs) ->
+	ibrowse:start(),
 	lager:start(),
     crawler_sup:start_link(StartArgs).
 
