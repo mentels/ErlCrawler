@@ -69,7 +69,10 @@ get_max_word_id() ->
   		{db, DbName},
 		{coll, CollName}
   	] = WordDbCfg,
-	get_max_id_from_db(ConnCfg, DbName, CollName).
+	{ok, Conn} = mongo:connect(ConnCfg),
+	MaxWordId = get_max_id_from_db(Conn, DbName, CollName),
+	mongo:disconnect(Conn),
+	MaxWordId.
 
 
 get_max_bucket_id() ->
@@ -79,15 +82,16 @@ get_max_bucket_id() ->
   		{db, DbName},
 		{coll, CollName}
   	] = IndexDbCfg,
-	get_max_id_from_db(ConnCfg, DbName, CollName).
+	{ok, Conn} = mongo:connect(ConnCfg),
+	MaxBucketId = get_max_id_from_db(Conn, DbName, CollName),
+	mongo:disconnect(Conn),
+	MaxBucketId.
 	
 
-get_max_id_from_db(ConnCfg, DbName, CollName) ->
-	{ok, Conn} = mongo:connect(ConnCfg),
+get_max_id_from_db(Conn, DbName, CollName) ->
 	SelectorDoc = {},
 	ProjectionDoc = {'_id', 1},
 	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn),
-	mongo:disconnect(Conn),
 	case mongo:rest(Cursor) of
 		[] ->
 			no_id;

@@ -11,6 +11,7 @@
 %% ------------------------------------------------------------------
 
 get_index(Word) ->
+%% 	get_word_id_and_bucket_id_list(Word).
 	case get_word_id_and_bucket_id_list(Word) of
 		no_bucket ->
 			[];
@@ -46,8 +47,9 @@ get_word_id_and_bucket_id_list(Word) ->
 
 
 get_word_id_and_bucket_id_list_from_db(Word, Conn, DbName, CollName) ->
-	SelectorDoc = {word, Word},
+	SelectorDoc = {word, bson:utf8(Word)},
 	ProjectionDoc = {'_id', 1, active_bucket_id, 1, frozen_bucket_id, 1},
+%% 	db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn).
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn) of
 		{ok, {{'_id', _, active_bucket_id, <<"unspec">>, frozen_bucket_id, []}}} ->
 			no_bucket;
@@ -84,20 +86,15 @@ get_url_id_list(BucketIdList, WordId)->
 get_url_id_list_from_db(BucketIdList, WordId, Conn, DbName, CollName) ->
 	SelectorDoc = {'_id', { bson:utf8("$in"), BucketIdList}}, 
 	ProjectionDoc = {indicies, 1, '_id', 0},
-	db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}).
-%% 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn) of
-%% 		{ok, {{indicies, DbIndexDocList}}} ->
-%% 			case lists:keyfind(WordId, 2, DbIndexDocList) of
-%% 				false -> 
-%% 					lager:debug("Now word id: ~p in bucket id: ~p.", [WordId, BucketId]),
-%% 					{ok, no_word};
-%% 				DbIndexDoc ->
-%% 					IncompleteCacheDoc = convert_db_doc_to_incomplete_cache_doc(DbIndexDoc),
-%% 					lager:debug("Incomplete cache doc returned: ~p", [IncompleteCacheDoc]),
-%% 					{ok, IncompleteCacheDoc}
-%% 			end;
-%% 
-%% 		{ok, {}} ->
-%% 			lager:debug("No bucket id: ~p", [BucketId]),
-%% 			{ok, no_bucket}
-%% 	end.
+	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn),
+	retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, mongo:rest(Cursor), []).
+		
+
+retrieve_url_id_list_from_list_of_db_index_doc_list(_, [], ResultUrlIdList) ->
+	ResultUrlIdList;
+	
+retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, [ {indicies, DbIndexDocList} | T ], ResultUrlIdList) ->
+	DbIndexDoc = lists:keyfind(WordId, 2, DbIndexDocList),
+	{_, _, _, [UrlIdList, _]} = DbIndexDoc,
+	retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, T, UrlIdList ++ ResultUrlIdList).
+	
