@@ -24,27 +24,27 @@ start_link(StartArgs) ->
 
 init(_StartArgs) ->
 	%% Set persistence server.
-	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
+	PersistenceCfg = config_helper:get_config(persistence_server),
 	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
 	
 	%% Set id server.
-	{ok, IdCfg} = application:get_env(id_cfg),
+	IdCfg = config_helper:get_config(id_server),
 	IdServerSpec = ?CHILD(id_server, worker, IdCfg, 2000),
 	
 	%% Set word db server.
-	{ok, WordDbCfg} = application:get_env(word_db_cfg),
+	WordDbCfg = config_helper:get_config(worddb_server),
 	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, 2000),
 	
 	%% Set index db server.
-	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
+	IndexDbCfg = config_helper:get_config(indexdb_server),
 	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, 2000),
 
 	%% Set db cleaner server.
-	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
+	DbCleanerCfg = config_helper:get_config(db_cleaner_server),
 	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, 2000),
 	
 	%% Set cache server.
-	{ok, CacheServerCfg} = application:get_env(cache_cfg),
+	CacheServerCfg = config_helper:get_config(cache_server),
 	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, 2000),
 	
     ChildrenSpecs = [ PersistenceServerSpec, IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec ],
