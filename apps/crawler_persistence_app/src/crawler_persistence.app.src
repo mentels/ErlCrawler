@@ -7,7 +7,7 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { crawler_persistence, [] }},
+  {mod, { crawler_persistence_app, [] }},
   {env, [
   	{persistence_cfg, [
   		{max_cache_doc_size, 2000}
@@ -17,12 +17,12 @@
 		{init_bucket_id, 0}
 	]},
 	{index_db_cfg, [   
-		{conn_cfg, {localhost, 27017}},
+		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
         {db, 'Crawler'},
         {coll, 'Index'}
 	]},
 	{word_db_cfg, [   
-		{conn_cfg, {localhost, 27017}},
+		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
         {db, 'Crawler'},
         {coll, 'Words'}
 	]},				
