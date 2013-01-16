@@ -18,11 +18,11 @@ get_config(ServerName) ->
 %% ------------------------------------------------------------------
 
 get_config_internal(persistence_server) ->
-	{ok, PersistenceCfg} = application:get_env(crawler_persistence, persistence_cfg),
+	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
 	PersistenceCfg;
 
 get_config_internal(id_server) ->
-	{ok, IdCfg}  = application:get_env(crawler_persistence, id_cfg),
+	{ok, IdCfg}  = application:get_env(id_cfg),
 	case get_max_word_id_and_bucket_id() of
 		{no_id, no_id} ->
 			IdCfg;
@@ -63,7 +63,7 @@ get_max_word_id_and_bucket_id() ->
 		  
 		  
 get_max_word_id() ->
-	{ok, WordDbCfg} = application:get_env(crawler_persistence, word_db_cfg),
+	{ok, WordDbCfg} = application:get_env(word_db_cfg),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
@@ -73,7 +73,7 @@ get_max_word_id() ->
 
 
 get_max_bucket_id() ->
-	{ok, IndexDbCfg} = application:get_env(crawler_persistence, index_db_cfg),
+	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
