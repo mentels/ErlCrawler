@@ -19,4 +19,11 @@
 	<natures>
 		<nature>org.erlide.core.erlnature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src</name>
+			<type>2</type>
+			<locationURI>PROJECT_LOC/apps/crawler_app/src</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>
