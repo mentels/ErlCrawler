@@ -52,7 +52,10 @@ get_config_internal(db_cleaner_server) ->
 
 get_config_internal(cache_server) ->
 	{ok, CacheServerCfg} = application:get_env(cache_cfg),
-	CacheServerCfg.
+	CacheServerCfg;
+
+get_config_internal(_Other) ->
+	undefined.
 		
 %%
 %% Max id retrieving helper functions.
