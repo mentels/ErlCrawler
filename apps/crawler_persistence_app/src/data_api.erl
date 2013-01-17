@@ -11,7 +11,7 @@
 %% ------------------------------------------------------------------
 
 get_index(Word) ->
-%% 	get_word_id_and_bucket_id_list(Word).
+	lager:debug("Request for url id list for word: ~w", [Word]),
 	case get_word_id_and_bucket_id_list(Word) of
 		no_bucket ->
 			[];
@@ -49,21 +49,25 @@ get_word_id_and_bucket_id_list(Word) ->
 get_word_id_and_bucket_id_list_from_db(Word, Conn, DbName, CollName) ->
 	SelectorDoc = {word, bson:utf8(Word)},
 	ProjectionDoc = {'_id', 1, active_bucket_id, 1, frozen_bucket_id, 1},
-%% 	db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn).
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn) of
 		{ok, {{'_id', _, active_bucket_id, <<"unspec">>, frozen_bucket_id, []}}} ->
+			lager:debug("Word: ~w has no bucket nor frozen buckets assigned.", [Word]),
 			no_bucket;
 		
 		{ok, {{'_id', WordId, active_bucket_id, <<"unspec">>, frozen_bucket_id, BucketIdList}}} ->
+			lager:debug("Word: ~w has no bucket assigned but has frozen buckets: ~p", [Word, BucketIdList]),
 			{WordId, BucketIdList};
 		
 		{ok, {{'_id', WordId, active_bucket_id, BucketId, frozen_bucket_id, []}}} ->
+			lager:debug("Word: ~w has bucket assigned: ~p but no fozen buckets.", [Word, BucketId]),
 			{WordId, [BucketId]};
 		
 		{ok, {{'_id', WordId, active_bucket_id, BucketId, frozen_bucket_id, BucketIdList}}} ->
+			lager:debug("Word: ~w has buceket: ~p and frozen buckets assinged: ~w", [Word, BucketId, BucketIdList]),
 			{WordId, [BucketId | BucketIdList]};
 		
 		{ok, {}} ->
+			lager:debug("There is entry for word: ~w in db.", [Word]),
 			no_word
 	end.
 
@@ -91,6 +95,7 @@ get_url_id_list_from_db(BucketIdList, WordId, Conn, DbName, CollName) ->
 		
 
 retrieve_url_id_list_from_list_of_db_index_doc_list(_, [], ResultUrlIdList) ->
+	lager:debug("Url id list collected: ~w", [ResultUrlIdList]),
 	ResultUrlIdList;
 	
 retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, [ {indicies, DbIndexDocList} | T ], ResultUrlIdList) ->
