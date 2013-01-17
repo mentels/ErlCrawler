@@ -16,5 +16,11 @@
   			 {download_timeout, 15000},
   			 {redirect_limit, 10}
   			]
+  		},
+  		{stoplists,
+   			[
+			{pol.txt},
+  			{eng.txt}
+  			]  			
   		}]}
  ]}.

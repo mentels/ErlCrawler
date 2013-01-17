@@ -16,7 +16,7 @@
 %% ====================================================================
 %% Behavioural functions 
 %% ====================================================================
--record(state, {links}).
+-record(state, {links,no}).
 
 %% init/1
 %% ====================================================================
@@ -31,11 +31,11 @@
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 start() ->
-    gen_server:start({local, link_server}, link_server, ["linksaa"], []). %% TODO : Olać Max download workers z konfiguracji
+    gen_server:start({local, link_server}, link_server, ["urls"], []). %% TODO : Olać Max download workers z konfiguracji
 
 init([FileName]) ->
 	Urls = readlines(FileName),
-    {ok, #state{links=Urls}}.
+    {ok, #state{links=Urls,no=1}}.
 
 readlines(FileName) ->
     {ok, Device} = file:open(FileName, [read]),
@@ -66,9 +66,9 @@ get_link()->
 	Timeout :: non_neg_integer() | infinity,
 	Reason :: term().
 %% ====================================================================
-handle_call(get_link, From, {state, Urls}=State) ->
-    Reply = lists:nth(random:uniform(10000),Urls),
-    {reply, Reply, State}.
+handle_call(get_link, From, {state, Urls, No}=State) ->
+    Reply = lists:nth(No,Urls),
+    {reply, Reply, {state, Urls, No+1}}.
 
 
 %% handle_cast/2
