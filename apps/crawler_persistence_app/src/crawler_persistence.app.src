@@ -10,7 +10,7 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{persistence_cfg, [
-  		{max_cache_doc_size, 2000}
+  		{max_cache_doc_size, 7000}
   	]},
   	{id_cfg, [   
 		{init_word_id, 1000},
@@ -32,7 +32,7 @@
  		]},
  	{cache_cfg, [
  		{percentage_to_flush, 50},
-        {max_cache_size, 5000}  					
+        {max_cache_size, 10000}  					
  		]}
   ]}
  ]}.

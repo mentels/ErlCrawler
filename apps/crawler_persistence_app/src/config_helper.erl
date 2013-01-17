@@ -18,11 +18,11 @@ get_config(ServerName) ->
 %% ------------------------------------------------------------------
 
 get_config_internal(persistence_server) ->
-	{ok, PersistenceCfg} = application:get_env(crawler_persistence, persistence_cfg),
+	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
 	PersistenceCfg;
 
 get_config_internal(id_server) ->
-	{ok, IdCfg}  = application:get_env(crawler_persistence, id_cfg),
+	{ok, IdCfg}  = application:get_env(id_cfg),
 	case get_max_word_id_and_bucket_id() of
 		{no_id, no_id} ->
 			IdCfg;
@@ -52,7 +52,10 @@ get_config_internal(db_cleaner_server) ->
 
 get_config_internal(cache_server) ->
 	{ok, CacheServerCfg} = application:get_env(cache_cfg),
-	CacheServerCfg.
+	CacheServerCfg;
+
+get_config_internal(_Other) ->
+	undefined.
 		
 %%
 %% Max id retrieving helper functions.
@@ -63,31 +66,35 @@ get_max_word_id_and_bucket_id() ->
 		  
 		  
 get_max_word_id() ->
-	{ok, WordDbCfg} = application:get_env(crawler_persistence, word_db_cfg),
+	{ok, WordDbCfg} = application:get_env(word_db_cfg),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
 		{coll, CollName}
   	] = WordDbCfg,
-	get_max_id_from_db(ConnCfg, DbName, CollName).
+	{ok, Conn} = mongo:connect(ConnCfg),
+	MaxWordId = get_max_id_from_db(Conn, DbName, CollName),
+	mongo:disconnect(Conn),
+	MaxWordId.
 
 
 get_max_bucket_id() ->
-	{ok, IndexDbCfg} = application:get_env(crawler_persistence, index_db_cfg),
+	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
 		{coll, CollName}
   	] = IndexDbCfg,
-	get_max_id_from_db(ConnCfg, DbName, CollName).
+	{ok, Conn} = mongo:connect(ConnCfg),
+	MaxBucketId = get_max_id_from_db(Conn, DbName, CollName),
+	mongo:disconnect(Conn),
+	MaxBucketId.
 	
 
-get_max_id_from_db(ConnCfg, DbName, CollName) ->
-	{ok, Conn} = mongo:connect(ConnCfg),
+get_max_id_from_db(Conn, DbName, CollName) ->
 	SelectorDoc = {},
 	ProjectionDoc = {'_id', 1},
 	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn),
-	mongo:disconnect(Conn),
 	case mongo:rest(Cursor) of
 		[] ->
 			no_id;
