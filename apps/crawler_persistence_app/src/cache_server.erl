@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/1	, retrieve_index/1, retrieve_old_indicies/0]).
+-export([start_link/1, add_index/1	, retrieve_index/1, retrieve_old_indicies/0, retrieve_all_indicies/0]).
 -export([get_state/0]).
 
 %% ------------------------------------------------------------------
@@ -32,6 +32,9 @@ retrieve_index(WordId) ->
 retrieve_old_indicies() ->
 	gen_server:call(?SERVER, {retrieve_old_indicies}).
 
+retrieve_all_indicies() ->
+	gen_server:call(?SERVER, {retrieve_all_indicies}).
+
 get_state() ->
 	gen_server:call(?SERVER, {get_state}).
 
@@ -40,6 +43,7 @@ get_state() ->
 %% ------------------------------------------------------------------
 
 init(CacheCfg) ->
+	process_flag(trap_exit, true),
 	[PercentageToFlushCfg, MaxCacheSizeCfg] = CacheCfg,
 	State = {{cache, []}, {size, 0}, PercentageToFlushCfg, MaxCacheSizeCfg},
     {ok, State}.
@@ -71,6 +75,10 @@ handle_call({retrieve_old_indicies}, _From, State) ->
 	{CacheDocList, UpdatedState} = update_state({retrieve_old_indicies, RemainingUrlIdCount}, State),
 	{reply, {ok, CacheDocList}, UpdatedState};
 
+handle_call({retrieve_all_indicies}, _From, State) ->
+	Cache = get_state_value(cache, State),
+	{reply, {ok, Cache}, State};
+
 handle_call({get_state}, _From, State) ->
 	{reply, State, State};
 
@@ -86,9 +94,11 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
+	lager:debug("Cache server terminating for shutdown reason."),
 	ok;
 
-terminate(_Reason, _State) ->
+terminate(Reason, _State) ->
+	lager:debug("Cache server terminating for reason: ~p", [Reason]),
     ok.
 
 
