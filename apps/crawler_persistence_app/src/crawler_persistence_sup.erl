@@ -23,13 +23,10 @@ start_link(StartArgs) ->
 %% ===================================================================
 
 init(_StartArgs) ->
-	%% Set persistence server.
-	PersistenceCfg = config_helper:get_config(persistence_server),
-	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
 	
 	%% Set id server.
 	IdCfg = config_helper:get_config(id_server),
-	IdServerSpec = ?CHILD(id_server, worker, IdCfg, 2000),
+	IdServerSpec = ?CHILD(id_server, worker, IdCfg, brutal_kill),
 	
 	%% Set word db server.
 	WordDbCfg = config_helper:get_config(worddb_server),
@@ -47,7 +44,11 @@ init(_StartArgs) ->
 	CacheServerCfg = config_helper:get_config(cache_server),
 	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, 2000),
 	
-    ChildrenSpecs = [ PersistenceServerSpec, IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec ],
+	%% Set persistence server.
+	PersistenceCfg = config_helper:get_config(persistence_server),
+	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
+	
+    ChildrenSpecs = [ IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec, PersistenceServerSpec ],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 

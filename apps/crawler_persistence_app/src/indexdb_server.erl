@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, save_indicies/4, get_index/2, delete_indicies/4, delete_bucket/1]).
+-export([start_link/1, save_indicies/4, get_index/2, get_url_cnt/1, delete_indicies/4, delete_bucket/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -28,6 +28,9 @@ save_indicies(BucketId, WordCnt, UrlCnt, IncompleCacheDocList) ->
 get_index(BucketId, WordId) ->
 	gen_server:call(?SERVER, {get_index, BucketId, WordId}).
 
+get_url_cnt(BucketId) ->
+	gen_server:call(?SERVER, {get_url_cnt, BucketId}).
+
 delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
 	gen_server:cast(?SERVER, {delete_indicies, BucketId, WordIdList, WordCntDiff, NewUrlCnt}).
 
@@ -40,6 +43,7 @@ delete_bucket(BucketId) ->
 %% ------------------------------------------------------------------
 
 init(IndexDbCfg) ->
+	process_flag(trap_exit, true),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
@@ -56,6 +60,10 @@ init(IndexDbCfg) ->
 
 handle_call({get_index, BucketId, WordId}, _From, State) ->
 	Reply = get_index(BucketId, WordId, State),
+	{reply, Reply, State};
+
+handle_call({get_url_cnt, BucketId}, _From, State) ->
+	Reply = get_url_cnt(BucketId, State),
 	{reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
@@ -83,11 +91,15 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, State) ->
+	lager:debug("Indexdb server terminating for shutdown reason."),
 	{_, _, Conn} = retrieve_collname_dbname_conn(State),
 	mongo:disconnect(Conn),
 	ok;
 
-terminate(_Reason, _State) ->
+terminate(Reason, State) ->
+	lager:debug("Indexdb server terminating for reason: ~p", [Reason]),
+	{_, _, Conn} = retrieve_collname_dbname_conn(State),
+	mongo:disconnect(Conn),
     ok.
 
 
@@ -114,7 +126,7 @@ get_index(BucketId, WordId, State) ->
 		{ok, {{indicies, DbIndexDocList}}} ->
 			case lists:keyfind(WordId, 2, DbIndexDocList) of
 				false -> 
-					lager:debug("Now word id: ~p in bucket id: ~p.", [WordId, BucketId]),
+					lager:debug("No word id: ~p in bucket id: ~p.", [WordId, BucketId]),
 					{ok, no_word};
 				DbIndexDoc ->
 					IncompleteCacheDoc = convert_db_doc_to_incomplete_cache_doc(DbIndexDoc),
@@ -127,7 +139,21 @@ get_index(BucketId, WordId, State) ->
 			{ok, no_bucket}
 	end.
 	
-	
+
+get_url_cnt(BucketId, State) ->
+	SelectorDoc = {'_id', BucketId}, 
+	ProjectionDoc = {url_cnt, 1, '_id', 0},
+	{CollName, DbName, Conn} = retrieve_collname_dbname_conn(State),
+	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn) of
+		{ok, {{url_cnt, UrlIdCnt}}} ->
+			lager:debug("Url cnt: ~p returned for bucket id: ~p", [UrlIdCnt, BucketId]),
+			{ok, UrlIdCnt};
+
+		{ok, {}} ->
+			lager:debug("No bucket id: ~p", [BucketId]),
+			{ok, no_bucket}
+	end.
+
 	
 delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt, State) ->
 	SelectorDoc = {'_id', BucketId},
