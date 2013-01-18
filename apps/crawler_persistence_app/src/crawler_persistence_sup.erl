@@ -30,23 +30,23 @@ init(_StartArgs) ->
 	
 	%% Set word db server.
 	WordDbCfg = config_helper:get_config(worddb_server),
-	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, 2000),
+	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, infinity),
 	
 	%% Set index db server.
 	IndexDbCfg = config_helper:get_config(indexdb_server),
-	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, 2000),
+	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, infinity),
 
 	%% Set db cleaner server.
 	DbCleanerCfg = config_helper:get_config(db_cleaner_server),
-	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, 2000),
+	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, infinity),
 	
 	%% Set cache server.
 	CacheServerCfg = config_helper:get_config(cache_server),
-	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, 2000),
+	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, infinity),
 	
 	%% Set persistence server.
 	PersistenceCfg = config_helper:get_config(persistence_server),
-	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
+	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, infinity),
 	
     ChildrenSpecs = [ IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec, PersistenceServerSpec ],
     RestartStrategy = { one_for_one , 0, 1},
