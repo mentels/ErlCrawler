@@ -47,7 +47,8 @@ perform_mongo_action(Action, DbName, Conn) ->
 	ReadMode = master,
 	case mongo:do(WriteMode, ReadMode, Conn, DbName, Action) of
 		{failure, FailureDesc} ->
-			lager:error("Mongo action failure: ~p", [FailureDesc]);
+			lager:error("Mongo action failure: ~p", [FailureDesc]),
+			{failure, FailureDesc};
 		Result ->
 			Result
 	end.

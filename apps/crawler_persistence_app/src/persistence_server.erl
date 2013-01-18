@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/2]).
+-export([start_link/1, add_index/2, prepare_to_stop/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -22,6 +22,9 @@
 start_link(PersistenceCfg) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, PersistenceCfg, []).
 
+prepare_to_stop() ->
+	gen_server:call(?SERVER, {prepare_to_stop}).
+
 add_index(Word, UrlId) ->
 	gen_server:cast(?SERVER, {add_index, Word, UrlId}).
 
@@ -30,9 +33,18 @@ add_index(Word, UrlId) ->
 %% ------------------------------------------------------------------
 
 init(PersistenceCfg) ->
+	process_flag(trap_exit, true),
 	[MaxCacheDocSizeCfg] = PersistenceCfg, 
 	State = MaxCacheDocSizeCfg,
     {ok, State}.
+
+
+handle_call({prepare_to_stop}, _From, State) ->
+	lager:debug("Cleaning persistence subsytem before stopping..."),
+	{ok, CacheDocList} = cache_server:retrieve_all_indicies(),
+	handle_old_indices(CacheDocList, State),
+	db_cleaner_server:flush_cache(),
+	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
@@ -51,7 +63,13 @@ handle_cast(_Msg, State) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+
+terminate(shutdown, _State) ->
+	lager:debug("Persistence server terminating for shutdown reason."),
+	ok;
+
+terminate(Reason, _State) ->
+	lager:debug("Persistence server terminating for reason: ~p", [Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -174,16 +192,23 @@ update_cache(CacheDoc, State) ->
 		{ok, full} ->
 			lager:debug("Cache is full. Cleaning."),
 			{ok, CacheDocList} = cache_server:retrieve_old_indicies(),
-			{ok, BucketId} = id_server:get_bucket_id(),
-			Counters = {0, 0},
-			Lists = {[], [], []},
-			handle_old_indicies(CacheDocList, BucketId, Counters, Lists, State)
+			handle_old_indices(CacheDocList, State)
 	end.
 
 
 %%
 %% Old indicies handling helper functions.
 %% 
+handle_old_indices([], _State) ->
+	ok;
+
+handle_old_indices(CacheDocList, State) ->
+	{ok, BucketId} = id_server:get_bucket_id(),
+	Counters = {0, 0},
+	Lists = {[], [], []},
+	handle_old_indicies(CacheDocList, BucketId, Counters, Lists, State).
+
+
 handle_old_indicies([CacheDoc | T], BucketId, Counters, Lists, State) ->
 	{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize} = CacheDoc,
 	{WordCnt, UrlCnt} = Counters,
@@ -205,8 +230,7 @@ handle_old_indicies([], BucketId, Counters, Lists, _State) ->
 	{WordCnt, UrlCnt} = Counters,
 	{IncompleteCacheDocList, WordIdToUpdateList, WordIdToFreezeList} = Lists,
 	save_indicies_as_bucket(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, WordIdToUpdateList),
-	freeze_indicies_in_bucket(WordIdToFreezeList, BucketId),
-	db_cleaner_server:set_bucket(BucketId, UrlCnt).
+	freeze_indicies_in_bucket(WordIdToFreezeList, BucketId).
 
 			
 enqueue_index_to_delete(unspec, unspec, _WordId) ->

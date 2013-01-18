@@ -37,6 +37,7 @@ freeze_bucket_id(WordIdList, BucketId) ->
 %% ------------------------------------------------------------------
 
 init(WordDbCfg) ->
+	process_flag(trap_exit, true),
 	[
   		{conn_cfg, ConnCfg},
   		{db, DbName},
@@ -76,12 +77,15 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, State) ->
-	io:format("wordsdb_server terminates...~n"),
-	{ {connection, Conn}, _StorageCfg, _InitBucketIdCfg } = State,
+	lager:debug("Worddb server terminating for shutdown reason."),
+	{_, _, Conn} = retrieve_collname_dbname_conn(State),
 	mongo:disconnect(Conn),
 	ok;
 
-terminate(_Reason, _State) ->
+terminate(Reason, State) ->
+	lager:debug("Worddb server terminating for reason: ~p", [Reason]),
+	{_, _, Conn} = retrieve_collname_dbname_conn(State),
+	mongo:disconnect(Conn),
     ok.
 
 

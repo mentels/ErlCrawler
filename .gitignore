@@ -1,4 +1,4 @@
 apps/crawler_app/ebin/
-apps/crawler_persistence/ebin
+apps/crawler_persistence_app/ebin/
 deps/
 log/

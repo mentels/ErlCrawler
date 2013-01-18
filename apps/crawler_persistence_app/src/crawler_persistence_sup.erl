@@ -23,31 +23,32 @@ start_link(StartArgs) ->
 %% ===================================================================
 
 init(_StartArgs) ->
-	%% Set persistence server.
-	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
-	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, 2000),
 	
 	%% Set id server.
-	{ok, IdCfg} = application:get_env(id_cfg),
-	IdServerSpec = ?CHILD(id_server, worker, IdCfg, 2000),
+	IdCfg = config_helper:get_config(id_server),
+	IdServerSpec = ?CHILD(id_server, worker, IdCfg, brutal_kill),
 	
 	%% Set word db server.
-	{ok, WordDbCfg} = application:get_env(word_db_cfg),
-	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, 2000),
+	WordDbCfg = config_helper:get_config(worddb_server),
+	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, infinity),
 	
 	%% Set index db server.
-	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
-	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, 2000),
+	IndexDbCfg = config_helper:get_config(indexdb_server),
+	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, infinity),
 
 	%% Set db cleaner server.
-	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
-	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, 2000),
+	DbCleanerCfg = config_helper:get_config(db_cleaner_server),
+	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, infinity),
 	
 	%% Set cache server.
-	{ok, CacheServerCfg} = application:get_env(cache_cfg),
-	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, 2000),
+	CacheServerCfg = config_helper:get_config(cache_server),
+	CacheServerSpec = ?CHILD(cache_server, worker, CacheServerCfg, infinity),
 	
-    ChildrenSpecs = [ PersistenceServerSpec, IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec ],
+	%% Set persistence server.
+	PersistenceCfg = config_helper:get_config(persistence_server),
+	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, infinity),
+	
+    ChildrenSpecs = [ IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec, PersistenceServerSpec ],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 
