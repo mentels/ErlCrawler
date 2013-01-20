@@ -49,9 +49,10 @@ simp_rel2(Address,[H|T],Accum) ->
 	end.
 
 simp_rel1(Address,[H|T],Accum) ->
+	NewAdr = lists:nth(1,string:tokens(string:sub_string(Address, 8),"/")),
 	case string:left(H,1) of
 		%%Cutting leading /, because http_url contains this
-		"/" -> case mochiweb_util:safe_relative_path(string:concat(string:sub_string(Address, 8),string:sub_string(H,2))) of
+		"/" -> case mochiweb_util:safe_relative_path(string:concat(NewAdr,H)) of
 				   undefined -> simplify_urls(Address,T,Accum);
 				   Url -> simplify_urls(Address,T,Accum++[string:concat("http://",Url)]);
 					_ -> simplify_urls(Address,T,Accum)
