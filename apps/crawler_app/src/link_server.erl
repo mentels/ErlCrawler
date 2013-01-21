@@ -71,6 +71,7 @@ handle_call(get_link, From, {state, Urls, No}=State) ->
 	case lists:flatlength(Urls) of
 		0 ->
 			Reply = [],
+			lager:log(notice,self(),"LINK_SERVER_PRZETWORZYL_WSZYSTKIE_ADRESY"),
 			application:stop(crawler),
 			application:stop(crawler_persistence);
 		_ ->
