@@ -4,7 +4,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([get_config/1]).
+-export([get_config/1, set_indexes/0]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -12,6 +12,9 @@
 
 get_config(ServerName) ->
 	get_config_internal(ServerName).
+
+set_indexes() ->
+	set_indexes_internal().
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -60,6 +63,16 @@ get_config_internal(conn_manager_server) ->
 
 get_config_internal(_Other) ->
 	undefined.
+
+
+set_indexes_internal() ->
+	case get_max_word_id() of
+		no_id ->
+			create_index_on_words_coll();
+		
+		_ ->
+			ok
+	end.
 		
 %%
 %% Max id retrieving helper functions.
@@ -104,4 +117,10 @@ get_id_ordering_fun() ->
 	end,
 	Fun.
 
-	
+%%
+%% Indexes creating helper functions.
+%%
+create_index_on_words_coll() ->
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	IndexSpec = {key, {word, 1}, unique, true},
+	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).

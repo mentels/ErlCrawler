@@ -23,6 +23,8 @@ start_link(StartArgs) ->
 %% ===================================================================
 
 init(_StartArgs) ->
+	
+	config_helper:set_indexes(),
 
 	%% Set id server.
 	IdCfg = config_helper:get_config(id_server),
