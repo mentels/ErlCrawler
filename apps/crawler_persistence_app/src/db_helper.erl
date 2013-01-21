@@ -4,7 +4,13 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([perform_action/2]).
+-export([perform_action/2, perform_spawned_action/2]).
+
+%% ------------------------------------------------------------------
+%% Internal Function Exports
+%% ------------------------------------------------------------------
+
+-export([perform_db_action/2]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -12,6 +18,9 @@
 
 perform_action(ActionDesc, ConnCfg) ->
 	perform_db_action(ActionDesc, ConnCfg).	
+
+perform_spawned_action(ActionDesc, ConnCfg) ->
+	spawn(?MODULE, perform_db_action, [ActionDesc, ConnCfg]).	
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions

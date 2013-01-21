@@ -41,8 +41,7 @@ init(PersistenceCfg) ->
 
 handle_call({prepare_to_stop}, _From, State) ->
 	lager:debug("Cleaning persistence subsytem before stopping..."),
-	{ok, CacheDocList} = cache_server:retrieve_all_indicies(),
-	handle_old_indices(CacheDocList, State),
+	handle_old_indices(State),
 	db_cleaner_server:flush_cache(),
 	{reply, ok, State};
 
@@ -85,39 +84,39 @@ add_word(Word) ->
 
 
 add_index(WordId, BucketId, UrlId, State) ->
-	case retrieve_index({from_cache}, WordId) of
+	case get_index_data_from_cache(WordId) of
 		index_not_found ->
 			lager:debug("Index for word id: ~p not found in cache.", [WordId]),
 			case is_bucket_in_db(BucketId) of
 				true ->
-					IncompleteCacheDoc = retrieve_index({from_db, BucketId}, WordId),
+					IncompleteCacheDoc = get_index_from_db(BucketId, WordId),
 					UpdatedCacheDoc = update_incomplete_cache_doc(IncompleteCacheDoc, BucketId, UrlId),
-					update_cache(UpdatedCacheDoc, State);
+					update_cache({add_index, UpdatedCacheDoc}, State);
 
 				false ->
 					lager:debug("Index for word id: ~p not found in db. Creating new index.", [WordId]),
-					update_cache(create_new_cache_doc(WordId, UrlId), State)
+					update_cache({add_index, create_new_cache_doc(WordId, UrlId)}, State)
 			end;
 		
 		unexpected ->
 			to_do;
 		
-		CacheDoc ->
-			UpdatedCacheDoc = update_cache_doc(CacheDoc, UrlId),
-			update_cache(UpdatedCacheDoc, State)
+		IndexData ->
+			UpdatedIndexData = update_index_data(IndexData, UrlId),
+			update_cache({update_index_data, WordId, UpdatedIndexData}, State)
 			
 	end.
 
 
 %%
-%% Index retrieveing helper functions.
+%% Index obtaining helper functions.
 %%
-retrieve_index({from_cache}, WordId) ->
-	{ok, Result} = cache_server:retrieve_index(WordId),
-	Result;
+get_index_data_from_cache(WordId) ->
+	{ok, IndexData} = cache_server:get_index_data(WordId),
+	IndexData.
 
 
-retrieve_index({from_db, BucketId}, WordId) ->
+get_index_from_db(BucketId, WordId) ->
 	case indexdb_functions:get_index(BucketId, WordId) of
 		{ok, no_word} ->
 			lager:error("No word id: ~p found in bucket id: ~p", [WordId, BucketId]),
@@ -135,13 +134,13 @@ retrieve_index({from_db, BucketId}, WordId) ->
 %%
 %% Cache doc updating helper functions.
 %%
-update_cache_doc({WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize}, UrlId) ->
+update_index_data({UrlIdList, UrlIdListSize}, UrlId) ->
 	case update_url_id_list(UrlIdList, UrlId) of
 		{not_updated, _} ->
-			{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize};
+			{UrlIdList, UrlIdListSize};
 			
 		{updated, UpdatedUrlIdList} -> 
-			{WordId, UpdatedUrlIdList, UrlIdListSize + 1, OldBucketId, InitUrlIdListSize}
+			{UpdatedUrlIdList, UrlIdListSize + 1}
 	end.
 
 
@@ -183,7 +182,18 @@ create_new_cache_doc(WordId, UrlId) ->
 	{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize}.
 
 
-update_cache(CacheDoc, State) ->
+update_cache({update_index_data, WordId, IndexData}, State) ->
+	case cache_server:update_index_data(WordId, IndexData) of
+		ok ->
+			lager:debug("Index data: ~w updated for word id: ~p.", [IndexData, WordId]),
+			ok;
+		
+		{ok, full} ->
+			lager:debug("Cache is full. Cleaning."),
+			handle_old_indices(State)
+	end;
+
+update_cache({add_index, CacheDoc}, State) ->
 	case cache_server:add_index(CacheDoc) of
 		ok ->
 			lager:debug("Cache doc: ~w added to cache.", [CacheDoc]),
@@ -191,22 +201,24 @@ update_cache(CacheDoc, State) ->
 		
 		{ok, full} ->
 			lager:debug("Cache is full. Cleaning."),
-			{ok, CacheDocList} = cache_server:retrieve_old_indicies(),
-			handle_old_indices(CacheDocList, State)
+			handle_old_indices(State)
 	end.
 
 
 %%
 %% Old indicies handling helper functions.
 %% 
-handle_old_indices([], _State) ->
-	ok;
-
-handle_old_indices(CacheDocList, State) ->
-	{ok, BucketId} = id_server:get_bucket_id(),
-	Counters = {0, 0},
-	Lists = {[], [], []},
-	handle_old_indicies(CacheDocList, BucketId, Counters, Lists, State).
+handle_old_indices(State) ->
+	case cache_server:retrieve_all_indicies() of
+		{ok, []} ->
+			ok;
+		
+		{ok, CacheDocList} ->
+			{ok, BucketId} = id_server:get_bucket_id(),
+			Counters = {0, 0},
+			Lists = {[], [], []},
+			handle_old_indicies(CacheDocList, BucketId, Counters, Lists, State)
+	end.
 
 
 handle_old_indicies([CacheDoc | T], BucketId, Counters, Lists, State) ->
