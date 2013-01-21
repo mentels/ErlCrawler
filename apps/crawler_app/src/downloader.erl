@@ -44,6 +44,8 @@ download2(Url,Url_id,Redirects_counter,{_,_,ConnectionTimeout, DownloadTimeout, 
 			{Url_id,Url,<<>>,error};
 			%% url_download_server:report(Url_id,Url,<<>>,error);
 		exit:_ ->
+			{Url_id,Url,<<>>,error};
+		_:_ ->
 			{Url_id,Url,<<>>,error}
 			%% url_download_server:report(Url,Url_id,<<>>,error)
 	end.

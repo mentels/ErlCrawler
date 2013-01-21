@@ -64,12 +64,10 @@ handle_call({set_max_active_workers,Number},_From,{state,Active_workers,Max_work
 	{reply,ok,NewState};
 
 handle_call({get_max_active_workers,Pid},_From,{state,_Active_workers,Max_workers}=State) ->
-	Pid ! Max_workers,
-	{reply,ok,State};
+	{reply,Max_workers,State};
 
 handle_call({get_current_active_workers,Pid},_From,{state,Active_workers,_Max_workers}=State) ->
-	Pid ! Active_workers,
-	{reply,ok,State}.
+	{reply,Active_workers,State}.
 
 %% ==============================
 %% SPAWN DOWNLOADERS ============

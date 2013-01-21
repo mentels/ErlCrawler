@@ -17,7 +17,7 @@ process_data(Url_id, Url, Source)->
 		lager:log(notice,self(),string:concat(string:concat(Url, " "),erlang:integer_to_list(erlang:length(Words)))),
 		save_url(Words, Url_id)
 	catch
-		_ -> []
+		_:_ -> []
 	end.
 	
 save_url([],_)->
