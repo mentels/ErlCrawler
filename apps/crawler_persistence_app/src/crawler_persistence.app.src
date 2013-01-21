@@ -12,19 +12,21 @@
   	{persistence_cfg, [
   		{max_cache_doc_size, 3000}
   	]},
-  	{id_cfg, [   
-		{init_word_id, 1000},
-		{init_bucket_id, 0}
-	]},
-	{index_db_cfg, [   
-		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
-        {db, 'Crawler'},
-        {coll, 'Index'}
-	]},
+  	{conn_manager_cfg, [
+  		{pool_size, 20},
+  		{host_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
+  		{db_name, 'Crawler'},
+  		{words_coll, 'Words'},
+  		{index_coll, 'Index'}
+  	]},
 	{word_db_cfg, [   
 		{conn_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
         {db, 'Crawler'},
         {coll, 'Words'}
+        ]},
+  	{id_cfg, [   
+		{init_word_id, 1000},
+		{init_bucket_id, 0}
 	]},				
  	{db_cleaner_cfg, [
  		{max_word_id_cnt, 1000},

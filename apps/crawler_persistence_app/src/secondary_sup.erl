@@ -1,4 +1,4 @@
--module(crawler_persistence_sup).
+-module(secondary_sup).
 
 -behaviour(supervisor).
 
@@ -23,19 +23,11 @@ start_link(StartArgs) ->
 %% ===================================================================
 
 init(_StartArgs) ->
-	
+
 	%% Set id server.
 	IdCfg = config_helper:get_config(id_server),
 	IdServerSpec = ?CHILD(id_server, worker, IdCfg, brutal_kill),
 	
-	%% Set word db server.
-	WordDbCfg = config_helper:get_config(worddb_server),
-	WordsDbServerSpec = ?CHILD(worddb_server, worker, WordDbCfg, infinity),
-	
-	%% Set index db server.
-	IndexDbCfg = config_helper:get_config(indexdb_server),
-	IndexDbServerSpec = ?CHILD(indexdb_server, worker, IndexDbCfg, infinity),
-
 	%% Set db cleaner server.
 	DbCleanerCfg = config_helper:get_config(db_cleaner_server),
 	DbCleanerServerSpec = ?CHILD(db_cleaner_server, worker, DbCleanerCfg, infinity),
@@ -48,7 +40,7 @@ init(_StartArgs) ->
 	PersistenceCfg = config_helper:get_config(persistence_server),
 	PersistenceServerSpec = ?CHILD(persistence_server, worker, PersistenceCfg, infinity),
 	
-    ChildrenSpecs = [ IdServerSpec, WordsDbServerSpec, IndexDbServerSpec, DbCleanerServerSpec, CacheServerSpec, PersistenceServerSpec ],
+    ChildrenSpecs = [ IdServerSpec, DbCleanerServerSpec, CacheServerSpec, PersistenceServerSpec],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 

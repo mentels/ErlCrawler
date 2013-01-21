@@ -80,7 +80,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 add_word(Word) ->
-	{ok, WordData} = worddb_server:save_word(Word),
+	{ok, WordData} = wordsdb_functions:save_word(Word),
 	WordData.
 
 
@@ -118,7 +118,7 @@ retrieve_index({from_cache}, WordId) ->
 
 
 retrieve_index({from_db, BucketId}, WordId) ->
-	case indexdb_server:get_index(BucketId, WordId) of
+	case indexdb_functions:get_index(BucketId, WordId) of
 		{ok, no_word} ->
 			lager:error("No word id: ~p found in bucket id: ~p", [WordId, BucketId]),
 			unexpected;
@@ -241,16 +241,16 @@ enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId) ->
 
 
 save_indicies_as_bucket(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, WordIdToUpdateList) ->
-	indexdb_server:save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList),
-	worddb_server:update_active_bucket_id(WordIdToUpdateList, BucketId).
+	indexdb_functions:save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList),
+	wordsdb_functions:update_active_bucket_id(WordIdToUpdateList, BucketId).
 
 
 freeze_indicies_in_bucket([], _BucketId) ->
 	ok;
 
 freeze_indicies_in_bucket(WordIdToFreezeList, BucketId) ->
-	worddb_server:freeze_bucket_id(WordIdToFreezeList, BucketId),
-	worddb_server:update_active_bucket_id(WordIdToFreezeList, unspec).
+	wordsdb_functions:freeze_bucket_id(WordIdToFreezeList, BucketId),
+	wordsdb_functions:update_active_bucket_id(WordIdToFreezeList, unspec).
 
 	
 %%

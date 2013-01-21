@@ -54,6 +54,10 @@ get_config_internal(cache_server) ->
 	{ok, CacheServerCfg} = application:get_env(cache_cfg),
 	CacheServerCfg;
 
+get_config_internal(conn_manager_server) ->
+	{ok, ConnManagerCfg} = application:get_env(conn_manager_cfg),
+	ConnManagerCfg;
+
 get_config_internal(_Other) ->
 	undefined.
 		
@@ -66,35 +70,19 @@ get_max_word_id_and_bucket_id() ->
 		  
 		  
 get_max_word_id() ->
-	{ok, WordDbCfg} = application:get_env(word_db_cfg),
-	[
-  		{conn_cfg, ConnCfg},
-  		{db, DbName},
-		{coll, CollName}
-  	] = WordDbCfg,
-	{ok, Conn} = mongo:connect(ConnCfg),
-	MaxWordId = get_max_id_from_db(Conn, DbName, CollName),
-	mongo:disconnect(Conn),
-	MaxWordId.
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	get_max_id_from_db(ConnCfg).
 
 
 get_max_bucket_id() ->
-	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
-	[
-  		{conn_cfg, ConnCfg},
-  		{db, DbName},
-		{coll, CollName}
-  	] = IndexDbCfg,
-	{ok, Conn} = mongo:connect(ConnCfg),
-	MaxBucketId = get_max_id_from_db(Conn, DbName, CollName),
-	mongo:disconnect(Conn),
-	MaxBucketId.
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	get_max_id_from_db(ConnCfg).
 	
 
-get_max_id_from_db(Conn, DbName, CollName) ->
+get_max_id_from_db(ConnCfg) ->
 	SelectorDoc = {},
 	ProjectionDoc = {'_id', 1},
-	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, CollName, DbName, Conn),
+	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, ConnCfg),
 	case mongo:rest(Cursor) of
 		[] ->
 			no_id;

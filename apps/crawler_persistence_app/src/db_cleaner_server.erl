@@ -134,7 +134,7 @@ get_and_favour_cache_entry(BucketId, State) ->
 	case update_state({retrieve_entry_and_move_to_top, BucketId}, State) of
 		no_entry ->
 			lager:debug("Cache entry for bucket id: ~p not found.", [BucketId]),
-			{ok, UrlIdCnt} = indexdb_server:get_url_cnt(BucketId),
+			{ok, UrlIdCnt} = indexdb_functions:get_url_cnt(BucketId),
 			update_state({add_and_retrieve_entry, BucketId, UrlIdCnt}, State);
 		
 		{CacheEntry, UpdatedState} ->
@@ -206,11 +206,11 @@ update_state({clean_cache}, State) ->
 %% Cleaning helper functions.	
 %%	
 clean_indicies(BucketId, bucket_empty) ->
-	indexdb_server:delete_bucket(BucketId);
+	indexdb_functions:delete_bucket(BucketId);
 
 clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}) ->
 	WordCntDiff = - WordIdListSize,
-	indexdb_server:delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlIdCnt).
+	indexdb_functions:delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlIdCnt).
 	
 	
 clean_cache([]) ->
