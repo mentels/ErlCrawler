@@ -86,7 +86,7 @@ delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
 	%% Delete from given bucket those entries that are related to word's ids 
 	%% contained on the WordIdList. 
 	IndiciesModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordIdList}}}},
-	db_helper:perform_action({modify, SelectorDoc, IndiciesModifierDoc}, ConnCfg),
+	db_helper:perform_spawned_action({modify, SelectorDoc, IndiciesModifierDoc}, ConnCfg),
 	lager:debug("From bucket id: ~w db index docs deleted: ~w", [BucketId, WordIdList]),
 	
 	%% Update words' ids counter.
@@ -103,7 +103,7 @@ delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
 delete_bucket_internal(BucketId) ->
 	SelectorDoc = {'_id', BucketId},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
-	db_helper:perform_action({delete, SelectorDoc}, ConnCfg),
+	db_helper:perform_spawned_action({delete, SelectorDoc}, ConnCfg),
 	lager:debug("Bucket id: ~p deleted from db.", [BucketId]).
 
 %%
