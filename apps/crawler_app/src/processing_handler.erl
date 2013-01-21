@@ -14,7 +14,7 @@ process_data(Url_id, Url, Source)->
 	try
 		HTMLTree = mochiweb_html:parse(Source),
 		Words = handle_words(HTMLTree),
-		io:format("~s ~w ",[Url,lists:flatlength(Words)]),
+		lager:log(notice,self(),string:concat(string:concat(Url, " "),erlang:integer_to_list(erlang:length(Words)))),
 		save_url(Words, Url_id)
 	catch
 		_ -> []

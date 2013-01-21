@@ -65,10 +65,18 @@ get_link()->
 	NewState :: term(),
 	Timeout :: non_neg_integer() | infinity,
 	Reason :: term().
+
 %% ====================================================================
 handle_call(get_link, From, {state, Urls, No}=State) ->
-    Reply = lists:nth(No,Urls),
-    {reply, Reply, {state, Urls, No+1}}.
+	case lists:flatlength(Urls) of
+		0 ->
+			Reply = [],
+			application:stop(crawler),
+			application:stop(crawler_persistence);
+		_ ->
+			Reply = lists:nth(random:uniform(erlang:length(Urls)),Urls)
+	end,
+    {reply, Reply, {state, lists:delete(Reply, Urls), No+1}}.
 
 
 %% handle_cast/2
