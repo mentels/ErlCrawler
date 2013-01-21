@@ -10,7 +10,8 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{persistence_cfg, [
-  		{max_cache_doc_size, 2500}
+  		{max_cache_doc_size, 2500},
+  		{retry_delay, 5000}
   	]},
   	{conn_manager_cfg, [
   		{pool_size, 20},
