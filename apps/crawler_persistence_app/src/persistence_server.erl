@@ -6,8 +6,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/2, retry_add_index/2, prepare_to_stop/0]).
--export([delayed_add_index/3]).
+-export([start_link/1, add_index/3, retry_add_index/3, prepare_to_stop/1]).
+-export([delayed_add_index/4]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -20,37 +20,38 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(PersistenceCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, PersistenceCfg, []).
+start_link([ServerName, CachesCfg, PersistenceCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [CachesCfg, PersistenceCfg], []).
 
 
-add_index(Word, UrlId) ->
-	gen_server:cast(?SERVER, {add_index, Word, UrlId}).
+add_index(ServerName, Word, UrlId) ->
+	gen_server:cast(ServerName, {add_index, Word, UrlId}).
 
 
-retry_add_index(Word, UrlId) ->
-	gen_server:cast(?SERVER, {retry_add_index, Word, UrlId}).
+retry_add_index(ServerName, Word, UrlId) ->
+	gen_server:cast(ServerName, {retry_add_index, Word, UrlId}).
 
 
-prepare_to_stop() ->
-	gen_server:call(?SERVER, {prepare_to_stop}).
+prepare_to_stop(ServerName) ->
+	gen_server:call(ServerName, {prepare_to_stop}).
 
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(PersistenceCfg) ->
+init([CachesCfg, PersistenceCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheDocSizeCfg, RetryCfg] = PersistenceCfg, 
-	State = [MaxCacheDocSizeCfg, RetryCfg],
+	{IndexCacheCfg, CleanerCacheCfg} = CachesCfg,
+	State = {MaxCacheDocSizeCfg, RetryCfg, IndexCacheCfg, CleanerCacheCfg},
     {ok, State}.
 
 
 handle_call({prepare_to_stop}, _From, State) ->
 	lager:debug("Cleaning persistence subsytem before stopping..."),
 	handle_old_indices(State),
-	db_cleaner_server:flush_cache(),
+	db_cleaner_server:flush_cache(get_cache_server_name(index, State)),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -100,10 +101,10 @@ add_index(first_try, Word, UrlId, State) ->
 	try add_index(WordId, BucketId, UrlId, State)
 	catch
 		error:no_word_in_index ->
-			spawn(?MODULE, delayed_add_index, [Word, UrlId, get_state_value(retry_delay, State)]);
+			spawn_delayed_add_index(Word, UrlId, State);
 		
 		error:no_bucket_in_index ->	
-			spawn(?MODULE, delayed_add_index, [Word, UrlId, get_state_value(retry_delay, State)])
+			spawn_delayed_add_index(Word, UrlId, State)
 	end;
 
 add_index(retry, Word, UrlId, State) ->
@@ -116,7 +117,7 @@ add_index(retry, Word, UrlId, State) ->
 	end;
 
 add_index(WordId, BucketId, UrlId, State) ->
-	case get_index_data_from_cache(WordId) of
+	case get_index_data_from_cache(WordId, State) of
 		index_not_found ->
 			lager:debug("Index for word id: ~p not found in cache.", [WordId]),
 			case is_bucket_in_db(BucketId) of
@@ -137,17 +138,21 @@ add_index(WordId, BucketId, UrlId, State) ->
 	end.
 
 
-delayed_add_index(Word, UrlId, SleepTime) ->
+spawn_delayed_add_index(Word, UrlId, State) ->
+	spawn(?MODULE, delayed_add_index, [Word, UrlId, get_state_value(retry_delay, State), self()]).
+
+
+delayed_add_index(Word, UrlId, SleepTime, ServerPid) ->
 	timer:sleep(SleepTime),
 	lager:debug("Retrying to add index for word: ~s with url id: ~p", [Word, UrlId]),
-	persistence_server:retry_add_index(Word, UrlId).
+	persistence_server:retry_add_index(ServerPid, Word, UrlId).
 
 
 %%
 %% Index obtaining helper functions.
 %%
-get_index_data_from_cache(WordId) ->
-	{ok, IndexData} = cache_server:get_index_data(WordId),
+get_index_data_from_cache(WordId, State) ->
+	{ok, IndexData} = cache_server:get_index_data(get_cache_server_name(index, State), WordId),
 	IndexData.
 
 
@@ -218,7 +223,7 @@ create_new_cache_doc(WordId, UrlId) ->
 
 
 update_cache({update_index_data, WordId, IndexData}, State) ->
-	case cache_server:update_index_data(WordId, IndexData) of
+	case cache_server:update_index_data(get_cache_server_name(index, State), WordId, IndexData) of
 		ok ->
 			lager:debug("Index data: ~w updated for word id: ~p.", [IndexData, WordId]),
 			ok;
@@ -229,7 +234,7 @@ update_cache({update_index_data, WordId, IndexData}, State) ->
 	end;
 
 update_cache({add_index, CacheDoc}, State) ->
-	case cache_server:add_index(CacheDoc) of
+	case cache_server:add_index(get_cache_server_name(index, State), CacheDoc) of
 		ok ->
 			lager:debug("Cache doc: ~w added to cache.", [CacheDoc]),
 			ok;
@@ -244,7 +249,7 @@ update_cache({add_index, CacheDoc}, State) ->
 %% Old indicies handling helper functions.
 %% 
 handle_old_indices(State) ->
-	case cache_server:retrieve_all_indicies() of
+	case cache_server:retrieve_all_indicies(get_cache_server_name(index, State)) of
 		{ok, []} ->
 			ok;
 		
@@ -260,7 +265,7 @@ handle_old_indicies([CacheDoc | T], BucketId, Counters, Lists, State) ->
 	{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize} = CacheDoc,
 	{WordCnt, UrlCnt} = Counters,
 	{IncompleteCacheDocList, WordIdToUpdateList, WordIdToFreezeList} = Lists,
-	enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId),
+	enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId, State),
 	IncompleteCacheDoc = {WordId, UrlIdList, UrlIdListSize},
 	NewCounters = {WordCnt + 1, UrlCnt + UrlIdListSize},
 	case is_url_id_list_size_max(UrlIdListSize, State) of
@@ -280,11 +285,11 @@ handle_old_indicies([], BucketId, Counters, Lists, _State) ->
 	freeze_indicies_in_bucket(WordIdToFreezeList, BucketId).
 
 			
-enqueue_index_to_delete(unspec, unspec, _WordId) ->
+enqueue_index_to_delete(unspec, unspec, _WordId, _State) ->
 	ok;
 
-enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId) ->
-	db_cleaner_server:add_index_to_delete(OldBucketId, InitUrlIdListSize, WordId).
+enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId, State) ->
+	db_cleaner_server:add_index_to_delete(get_cache_server_name(index, State), OldBucketId, InitUrlIdListSize, WordId).
 
 
 save_indicies_as_bucket(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, WordIdToUpdateList) ->
@@ -324,12 +329,26 @@ is_bucket_in_db(BucketId) ->
 			true
 	end.
 
+%%
+%% Cache server names helper functions.
+%%
+get_cache_server_name(index, State) ->
+	get_state_value(index_cache_server_name, State);
+
+get_cache_server_name(cleaner, State) ->
+	get_state_value(cleaner_cache_server_name, State).
 
 %%
 %% State handling helper functions.
 %% 
-get_state_value(max_cache_doc_size, [{max_cache_doc_size, Value}, _]) ->
+get_state_value(max_cache_doc_size, {{max_cache_doc_size, Value}, _, _, _}) ->
 	Value;
 
-get_state_value(retry_delay, [_, {retry_delay, Value}]) ->
+get_state_value(retry_delay, {_, {retry_delay, Value}, _, _}) ->
+	Value;
+
+get_state_value(index_cache_server_name, {_, _, {index_cache_server_name, Value}, _}) ->
+	Value;
+
+get_state_value(cleaner_cache_server_name, {_, _, _, {cleaner_cache_server_name, Value}}) ->
 	Value.

@@ -6,8 +6,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index_to_delete/3, flush_cache/0]).
--export([get_state/0]).
+-export([start_link/1, add_index_to_delete/4, flush_cache/1]).
+-export([get_state/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -20,30 +20,34 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(DbCleanerCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, DbCleanerCfg, []).
+start_link([ServerName, DbCleanerCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, DbCleanerCfg], []).
 
-add_index_to_delete(BucketId, UrlIdListSize, WordId) ->
+
+add_index_to_delete(ServerName, BucketId, UrlIdListSize, WordId) ->
 	%% UrlIdListSize refers to number of urls' ids persited in the bucket for given word id.
-	gen_server:cast(?SERVER, {add_index_to_delete, BucketId, UrlIdListSize, WordId}).
+	gen_server:cast(ServerName, {add_index_to_delete, BucketId, UrlIdListSize, WordId}).
 
-flush_cache() ->
-	gen_server:call(?SERVER, {flush_cache}).
 
-get_state() ->
-	gen_server:call(?SERVER, {get_state}).
+flush_cache(ServerName) ->
+	gen_server:call(ServerName, {flush_cache}).
+
+
+get_state(ServerName) ->
+	gen_server:call(ServerName, {get_state}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(DbCleanerCfg) ->
+init([ServerName, DbCleanerCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg] = DbCleanerCfg,
     
 	%% cache hold the list of tuples of format: {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize}
 	%% size refers to summary sizes of WordIdList of each entry; it is the sum of WordIdListSize of each entry
-	CacheTabId = ets:new(cleaner_cache, [set, {keypos, 1}, private, named_table]),
+	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cleaner_cache"),
+	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
 	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg},
     {ok, State}.
 
