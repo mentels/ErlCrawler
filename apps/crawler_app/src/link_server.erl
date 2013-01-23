@@ -72,8 +72,8 @@ handle_call(get_link, From, {state, Urls, No}=State) ->
 		0 ->
 			Reply = [],
 			lager:log(notice,self(),"LINK_SERVER_PRZETWORZYL_WSZYSTKIE_ADRESY"),
-			application:stop(crawler),
-			application:stop(crawler_persistence);
+			%% application:stop(crawler),
+			%% application:stop(crawler_persistence);
 		_ ->
 			Reply = lists:nth(random:uniform(erlang:length(Urls)),Urls)
 	end,

@@ -24,7 +24,8 @@ save_url([],_)->
 	ok;
 save_url([H|T],Url_id) ->
 	%% Jesli slowa nie ma na stopliscie a jest w slowniku, to zapisujemy
-	case stoplist_server:check_word(string:to_lower(string:strip(H, both))) of
+	Word = string:to_lower(string:strip(H, both)),
+	case stoplist_server:check_word(Word) of
 		true ->crawler_persistence:add_index(H,Url_id);
 		_ -> ok
 	end,
