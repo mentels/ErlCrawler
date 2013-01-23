@@ -10,15 +10,15 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 1}
+  		{channels_cnt, 10}
   	]},
   	{persistence_cfg, [
-  		{max_cache_doc_size, 5},
+  		{max_cache_doc_size, 3000},
   		{retry_delay, 5000}
   	]},
   	{conn_manager_cfg, [
-  		{pool_size, 10},
-  		{host_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
+  		{pool_size, 50},
+  		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
   		{index_coll, 'Index'}
@@ -28,14 +28,14 @@
 		{init_bucket_id, 0}
 	]},				
  	{db_cleaner_cfg, [
- 		{max_word_id_cnt, 2000},
+ 		{max_word_id_cnt, 1000},
         {max_unused_url_id_cnt_percentage, 50}			
  	]},
  	{index_cache_cfg, [
-        {max_cache_size, 10}  					
+        {max_cache_size, 6000}  					
  	]},
  	{words_cache_cfg, [
-        {max_cache_size, 5}  					
+        {max_cache_size, 1000}  					
  	]}
   ]}
  ]}.

@@ -67,7 +67,7 @@ terminate(shutdown, State) ->
   	close_pool(State),
 	ok;
   
-terminate(Reason, State) ->
+terminate(_Reason, State) ->
 	close_pool(State),
     ok.
 
