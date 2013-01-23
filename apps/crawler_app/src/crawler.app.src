@@ -22,5 +22,8 @@
 			{pol.txt},
   			{eng.txt}
   			]  			
-  		}]}
+  		},
+  		{eng_words,'eng_words.txt'},
+  		{pol_words,'pol_words.txt'}
+  		]}
  ]}.

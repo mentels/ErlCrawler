@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([spawn_downloaders/1,set_max_active_workers/1, get_max_active_workers/1, get_current_active_workers/1, start_processing/0]).
+-export([spawn_downloaders/1,set_max_active_workers/1, get_max_active_workers/0, get_current_active_workers/0, start_processing/0]).
 
 %% ====================================================================
 %% Behavioural functions 
@@ -28,13 +28,13 @@ start_processing()->
 	gen_server:call(?MODULE, start_processing).
 
 set_max_active_workers(Number)->
-	gen_server:call(?MODULE,set_max_active_workers,[Number]).
+	gen_server:call(?MODULE,{set_max_active_workers,Number}).
 
-get_max_active_workers(Pid)->
-	gen_server:call(?MODULE,get_max_active_workers,[Pid]).
+get_max_active_workers()->
+	gen_server:call(?MODULE,get_max_active_workers).
 
-get_current_active_workers(Pid)->
-	gen_server:call(?MODULE,get_current_active_workers,[Pid]).
+get_current_active_workers()->
+	gen_server:call(?MODULE,get_current_active_workers).
 
 %% ==============================
 %% HANDLE_CALLS =================
@@ -59,14 +59,14 @@ handle_call(start_processing,_From,{state,Active_workers,Max_workers,Cfg}=State)
 %% 2. START PROCESSING===========
 %% ==============================
 
-handle_call({set_max_active_workers,Number},_From,{state,Active_workers,Max_workers}=State) when Number>=0 ->
-	NewState = {state,Active_workers,Number},
+handle_call({set_max_active_workers,Number},_From,{state,Active_workers,Max_workers,Cfg}=State) when Number>=0 ->
+	NewState = {state,Active_workers,Number,Cfg},
 	{reply,ok,NewState};
 
-handle_call({get_max_active_workers,Pid},_From,{state,_Active_workers,Max_workers}=State) ->
+handle_call(get_max_active_workers,_From,{state,_Active_workers,Max_workers,_Cfg}=State) ->
 	{reply,Max_workers,State};
 
-handle_call({get_current_active_workers,Pid},_From,{state,Active_workers,_Max_workers}=State) ->
+handle_call(get_current_active_workers,_From,{state,Active_workers,_Max_workers,_Cfg}=State) ->
 	{reply,Active_workers,State}.
 
 %% ==============================
@@ -83,7 +83,7 @@ spawn_downloaders({state,Active_workers,Max_workers,{_,UDS_fail_interval,_,_,_}=
 		_ -> 
 			State
 	end;
-spawn_downloaders({state,Active_workers,Max_workers}=State) when Active_workers >= Max_workers ->
+spawn_downloaders({state,Active_workers,Max_workers,Cfg}=State) when Active_workers >= Max_workers ->
 	State.
 
 
