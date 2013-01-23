@@ -46,7 +46,7 @@ init([ServerName, DbCleanerCfg]) ->
     
 	%% cache hold the list of tuples of format: {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize}
 	%% size refers to summary sizes of WordIdList of each entry; it is the sum of WordIdListSize of each entry
-	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cleaner_cache"),
+	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cache"),
 	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
 	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg},
     {ok, State}.
@@ -67,7 +67,6 @@ handle_cast({add_index_to_delete, BucketId, UrlIdListSize, WordId}, State) ->
 	WordIdListSize = get_cache_entry_value(word_id_list_size, CacheEntry),
 	case is_bucket_ready_to_clean(CacheEntry, UrlIdListSize, State) of
 		true ->
-			lager:debug("Bucket id: ~p is ready to clean.", [BucketId]),
 			case calculate_url_id_cnt(CacheEntry, UrlIdListSize) of
 				0 -> 
 					clean_indicies(BucketId, bucket_empty),
@@ -80,16 +79,13 @@ handle_cast({add_index_to_delete, BucketId, UrlIdListSize, WordId}, State) ->
 			end;
 		
 		false ->
-			lager:debug("Bucket id: ~p is not ready to clean.", [BucketId]),
 			NewUnusedUrlIdCnt = get_cache_entry_value(unused_url_id_cnt, CacheEntry) + UrlIdListSize,
 			NewWordIdList = [WordId | get_cache_entry_value(word_id_list, CacheEntry) ],
 			UpdatedState = update_state({update_entry, BucketId, NewUnusedUrlIdCnt, NewWordIdList, WordIdListSize + 1}, State),
 			case is_cache_full(UpdatedState) of
 				true ->
-					lager:debug("Cache is full."),
 					{noreply, update_state({clean_cache}, UpdatedState)};
 				false ->
-					lager:debug("Cache is not full."),
 					{noreply, UpdatedState}
 			end
 	end;
@@ -103,11 +99,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Db cleaner server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Db cleaner server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -132,14 +126,12 @@ get_cache_entry(BucketId, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
 	case ets:lookup(CacheTabId, BucketId) of
 		[] ->
-			lager:debug("Cache entry for bucket id: ~p not found.", [BucketId]),
 			{ok, UrlIdCnt} = indexdb_functions:get_url_cnt(BucketId),
 			CacheEntry = create_cache_entry(BucketId, UrlIdCnt),
 			ets:insert(CacheTabId, CacheEntry),
 			CacheEntry;
 		
 		[CacheEntry] ->
-			lager:debug("Cache entry for bucket id: ~p found.", [BucketId]),
 			CacheEntry
 	end.
 	
@@ -248,5 +240,4 @@ get_state_value(unused_url_id_ratio, {_, _, _, {max_unused_url_id_cnt_percentage
 
 
 update_state_value({size, NewSize}, {CacheCfg, _, Cfg1, Cfg2}) ->
-	lager:debug("Cache size updated: ~p", [NewSize]),
 	{CacheCfg, {size, NewSize}, Cfg1, Cfg2}.

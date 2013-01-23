@@ -10,10 +10,10 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 2}
+  		{channels_cnt, 1}
   	]},
   	{persistence_cfg, [
-  		{max_cache_doc_size, 2500},
+  		{max_cache_doc_size, 5},
   		{retry_delay, 5000}
   	]},
   	{conn_manager_cfg, [
@@ -32,10 +32,10 @@
         {max_unused_url_id_cnt_percentage, 50}			
  	]},
  	{index_cache_cfg, [
-        {max_cache_size, 5000}  					
+        {max_cache_size, 10}  					
  	]},
  	{words_cache_cfg, [
-        {max_cache_size, 5000}  					
+        {max_cache_size, 5}  					
  	]}
   ]}
  ]}.

@@ -47,8 +47,11 @@ init(DispatcherCfg) ->
 
 handle_call(prepare_to_stop, _From,  State) ->
 	DispatchTabId = get_state_value(dispatch_tab_id, State),
-%% 	lists:foreach(fun(I) -> persistence_server:prepare_to_stop(I) end, ets:match_object(DispatchTabId, '$1')),
-	prepare_to_stop(ets:match_object(DispatchTabId, '$1')),
+	lists:foreach(fun(I) ->
+					{_ChannelId, PersistenceServerName} = I,
+					persistence_server:prepare_to_stop(PersistenceServerName) 
+				end, 
+		ets:match_object(DispatchTabId, '$1')),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -70,11 +73,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Dispatch server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Dispatch server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 
@@ -96,16 +97,7 @@ set_dispatch_table(DispatchTabId, ChannelsCnt, [PersistenceServerName| T]) ->
 dispatch_add_index(Word, UrlId, DispatchTabId, ChannelsCnt) ->
 	Key = erlang:phash(Word, ChannelsCnt),
 	[[PersistenceServerName]] = ets:match(DispatchTabId, {Key, '$0'}),
-	persistence_server:add_index(PersistenceServerName, Word, UrlId),
-	lager:debug("Request {~s, ~p} dispatched to: ~p", [Word, UrlId, PersistenceServerName]).
-
-
-prepare_to_stop([]) ->
-	ok;
-
-prepare_to_stop([PersistenceServerName | T]) ->
-	persistence_server:prepare_to_stop(PersistenceServerName),
-	prepare_to_stop(T).
+	persistence_server:add_index(PersistenceServerName, Word, UrlId).
 
 
 %%

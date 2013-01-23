@@ -51,7 +51,7 @@ get_state(ServerName) ->
 init([ServerName, WordsCacheCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheSizeCfg] = WordsCacheCfg,
-	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_words_cache"),
+	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cache"),
 	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
 	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg},
     {ok, State}.
@@ -63,7 +63,6 @@ handle_call({add_word_cache_doc, CacheWordDoc}, _From, State) ->
 			UpdatedState = update_state({add_word_cache_doc, CacheWordDoc}, State),
 			{reply, ok, UpdatedState};
 		true ->
-			lager:debug("After adding word cache doc: ~w the cache sie full.", [CacheWordDoc]),
 			{reply, {ok, full}, State}
 	end;
 
@@ -100,11 +99,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Words cache server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Words cache server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 
@@ -124,7 +121,6 @@ get_word_data_internal(Word, State) ->
 
 		[[WordId, ActiveBucketId]] ->
 			WordData = {WordId, ActiveBucketId},
-			lager:debug("Index data returned: ~w", [WordData]),
 			WordData
 
 	end.
@@ -135,13 +131,11 @@ get_word_data_internal(Word, State) ->
 update_state({add_word_cache_doc, CacheWordDoc}, State) ->
 	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
 	ets:insert(CacheTabId, CacheWordDoc),
-	lager:debug("New word cache doc created: ~p; new size is: ~p", [CacheWordDoc, Size + 1]),
 	update_state_value({size, Size + 1}, State);
 
 update_state(flush, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
 	ets:delete_all_objects(CacheTabId),
-	lager:debug("Words cache flushed"),
 	update_state_value({size, 0}, State).
 
 

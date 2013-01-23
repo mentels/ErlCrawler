@@ -61,12 +61,24 @@ init([]) ->
 
 handle_call(all_save_word_completed, _From, State) ->
 	case State of
-		{save_word_spawned, 0} ->
+		{{save_word_spawned, 0}, _}  ->
 			{reply, true, State};			
 
-		{save_word_spawned, _} ->
+		{{save_word_spawned, _}, _} ->
 			{reply, false, State}
 	end;
+
+handle_call(all_new_bucket_operations_to_completed, _From, State) ->
+	case State of
+		{_, {new_bucket_operations_spawned, 0}}  ->
+			{reply, true, State};			
+
+		{_, {new_bucket_operations_spawned, _}} ->
+			{reply, false, State}
+	end;
+
+handle_call(get_state, _From, State) ->
+	{reply, State, State};
 
 handle_call(_Request, _From, State) ->
 	{reply, ok, State}.
@@ -74,22 +86,18 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(save_word_about_to_be_spawned, State) ->
 	{{_, SpawnedCnt}, NewBucketOperations} = State,
-	lager:debug("Notification: save word about to be spawned."),
 	{noreply, {{save_word_spawned, SpawnedCnt + 1}, NewBucketOperations}};
 
 handle_cast(save_word_completed, State) ->
    	{{_, SpawnedCnt}, NewBucketOperations} = State,
-	lager:debug("Notification: save word completed."),
 	{noreply, {{save_word_spawned, SpawnedCnt - 1}, NewBucketOperations}};
 
 handle_cast(new_bucket_operation_about_to_be_spawned, State) ->
    	{SaveWordOperations, {new_bucket_operations_spawned, SpawnedCnt}} = State,
-	lager:debug("Notification: new bucket operation about to be spawned."),
 	{noreply, {SaveWordOperations, {new_bucket_operations_spawned, SpawnedCnt + 1}}};
 
 handle_cast(new_bucket_operation_completed, State) ->
    	{SaveWordOperations, {new_bucket_operations_spawned, SpawnedCnt}} = State,
-	lager:debug("Notification: new bucket operation completed."),
 	{noreply, {SaveWordOperations, {new_bucket_operations_spawned, SpawnedCnt - 1}}};
 
 handle_cast(_Msg, State) ->
@@ -100,11 +108,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Notification server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Notification server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 

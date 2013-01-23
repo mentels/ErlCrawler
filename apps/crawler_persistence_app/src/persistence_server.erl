@@ -33,7 +33,7 @@ retry_add_index(ServerName, Word, UrlId) ->
 
 
 prepare_to_stop(ServerName) ->
-	gen_server:call(ServerName, {prepare_to_stop}).
+	gen_server:call(ServerName, prepare_to_stop).
 
 
 %% ------------------------------------------------------------------
@@ -48,8 +48,8 @@ init([HelperServersCfg, PersistenceCfg]) ->
     {ok, State}.
 
 
-handle_call({prepare_to_stop}, _From, State) ->
-	lager:debug("Cleaning persistence subsytem before stopping..."),
+handle_call(prepare_to_stop, _From, State) ->
+	lager:debug("Serving request: prepare_to_stop."),
 	save_index_cache_to_db(State),
 	db_cleaner_server:flush_cache(get_index_cache_server_name(index, State)),
 	{reply, ok, State};
@@ -59,11 +59,14 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({add_index, Word, UrlId}, State) ->
-	lager:debug("Mailbox queue size: ~p", [erlang:process_info(self(), message_queue_len)]),
+	lager:debug("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
+				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(first_try, Word, UrlId, State),
 	{noreply, State};
 
 handle_cast({retry_add_index, Word, UrlId}, State) ->
+	lager:debug("Serving request: {retry_add_index, ~p, ~p}. Mailbox queue size: ~p", 
+				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(retry, Word, UrlId, State),
 	{noreply, State};
 
@@ -76,11 +79,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Persistence server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Persistence server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -91,23 +92,27 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 get_word_data(Word, State) ->
+	lager:debug("Obtaining data for word: ~p.", [Word]),
 	case get_word_data_from_cache(Word, State) of
 		word_not_found ->
-			lager:debug("Word ~p not found in cache.", [Word]),
 			case get_word_data_from_db(Word) of
 				no_word ->
 					{Word, WordId, BucketId} = create_new_cache_word_doc(Word),
+					lager:debug("Word data not found in cache nor in db. New cache word doc created: {~p, ~p, ~p}.", 
+								[Word, WordId, BucketId]),
 					update_words_cache({add_word_cache_doc, {Word, WordId, BucketId}}, State),
 					spawn_save_word_to_db({Word, WordId, BucketId}, State),
 					{WordId, BucketId};
 				
 				{WordId, BucketId} ->
+					lager:debug("Word data not found in cache but in db: {~p, ~p}.", [WordId, BucketId]),
 					update_words_cache({add_word_cache_doc, {Word, WordId, BucketId}}, State),
 					{WordId, BucketId}
 				
 			end;
 		
 		WordData ->
+			lager:debug("Word data found in cache: ~p.", [WordData]),
 			WordData
 	
 	end.
@@ -115,7 +120,6 @@ get_word_data(Word, State) ->
 
 add_index(first_try, Word, UrlId, State) ->
 	{WordId, BucketId} = get_word_data(Word, State),
-	lager:debug("Adding index: word id: ~p; bucket id: ~p; url id: ~p.", [WordId, BucketId, UrlId]),
 	try add_index(WordId, BucketId, UrlId, State)
 	catch
 		error:no_word_in_index ->
@@ -127,31 +131,39 @@ add_index(first_try, Word, UrlId, State) ->
 
 add_index(retry, Word, UrlId, State) ->
 	{WordId, BucketId} = get_word_data(Word, State),
-	lager:debug("Retrying to add index: word id: ~p; bucket id: ~p; url id: ~p.", [WordId, BucketId, UrlId]),
 	try add_index(WordId, BucketId, UrlId, State)
 	catch
 		error:_ ->
-			lager:debug("Retry failed.")
+			lager:error("request: {retry_add_index, ~p, ~p} failed.", [Word, UrlId])
 	end;
 
 add_index(WordId, BucketId, UrlId, State) ->
+	lager:debug("Obtaining index data for word data: {~p, ~p}.", [WordId, BucketId]),
 	case get_index_data_from_cache(WordId, State) of
 		index_not_found ->
-			lager:debug("Index for word id: ~p not found in cache.", [WordId]),
 			case is_bucket_in_db(BucketId) of
 				true ->
 					IncompleteCacheDoc = get_index_from_db(BucketId, WordId),
 					UpdatedCacheDoc = update_incomplete_cache_doc(IncompleteCacheDoc, BucketId, UrlId),
-					update_cache({add_index, UpdatedCacheDoc}, State);
+					lager:debug("Index data for word data: {~p, ~p} not found in cache but in db.", [WordId, BucketId]),
+					update_index_cache({add_index, UpdatedCacheDoc}, State);
 
 				false ->
-					lager:debug("Index for word id: ~p not found in db. Creating new index.", [WordId]),
-					update_cache({add_index, create_new_cache_doc(WordId, UrlId)}, State)
+					lager:debug("Index data for word data: {~p, ~p} not found in cache nor in db. Creating new cache index doc."
+							   , [WordId, BucketId]),
+					update_index_cache({add_index, create_new_index_cache_doc(WordId, UrlId)}, State)
 			end;
 		
 		IndexData ->
-			UpdatedIndexData = update_index_data(IndexData, UrlId),
-			update_cache({update_index_data, WordId, UpdatedIndexData}, State)
+			lager:debug("Index data found in cache."),
+			case update_index_data(IndexData, UrlId) of
+				not_updated ->
+					lager:debug("Url id ~p is already contained in the index data: ~w.", [UrlId, IndexData]),
+					ok;
+				
+				UpdatedIndexData ->
+					update_index_cache({update_index_data, WordId, UpdatedIndexData}, State)
+			end
 			
 	end.
 
@@ -160,8 +172,14 @@ enqueue_indicies_to_delete([], _) ->
 	ok;
 	
 enqueue_indicies_to_delete([{WordId, _, _, OldBucketId, InitUrlIdListSize} | T], CleanerServerName) ->
-	db_cleaner_server:add_index_to_delete(CleanerServerName, OldBucketId, InitUrlIdListSize, WordId),
-	enqueue_indicies_to_delete(T, CleanerServerName).
+	case (OldBucketId == unspec) and (InitUrlIdListSize == unspec) of
+		true ->
+			enqueue_indicies_to_delete(T, CleanerServerName);
+	
+		false ->
+			db_cleaner_server:add_index_to_delete(CleanerServerName, OldBucketId, InitUrlIdListSize, WordId),
+			enqueue_indicies_to_delete(T, CleanerServerName)
+	end.
 
 %%%
 %%% Word data obtaining helper functions.
@@ -171,7 +189,7 @@ get_word_data_from_cache(Word, State) ->
 	WordData.
 
 get_word_data_from_db(Word) ->
-	WordData = wordsdb_functions:get_word_data(Word).
+	wordsdb_functions:get_word_data(Word).
 
 %%
 %% Index obtaining helper functions.
@@ -202,7 +220,7 @@ get_index_from_db(BucketId, WordId) ->
 update_index_data({UrlIdList, UrlIdListSize}, UrlId) ->
 	case update_url_id_list(UrlIdList, UrlId) of
 		{not_updated, _} ->
-			{UrlIdList, UrlIdListSize};
+			not_updated;
 			
 		{updated, UpdatedUrlIdList} -> 
 			{UpdatedUrlIdList, UrlIdListSize + 1}
@@ -239,7 +257,7 @@ update_url_id_list([ H | T ], UrlId) ->
 %%
 %% Cache handling helper functions.
 %%
-create_new_cache_doc(WordId, UrlId) ->
+create_new_index_cache_doc(WordId, UrlId) ->
 	UrlIdList = [UrlId],
 	UrlIdListSize = 1,
 	OldBucketId = unspec,
@@ -247,25 +265,25 @@ create_new_cache_doc(WordId, UrlId) ->
 	{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize}.
 
 
-update_cache({update_index_data, WordId, IndexData}, State) ->
+update_index_cache({update_index_data, WordId, IndexData}, State) ->
 	case index_cache_server:update_index_data(get_index_cache_server_name(index, State), WordId, IndexData) of
 		ok ->
-			lager:debug("Index data: ~w updated for word id: ~p.", [IndexData, WordId]),
+			lager:debug("Index cache updated for word id: ~p with new index data: ~w.", [WordId, IndexData]),
 			ok;
 		
 		{ok, full} ->
-			lager:debug("Cache is full. Cleaning."),
+			lager:debug("Index cache updated for word id: ~p with new index data: ~w.", [WordId, IndexData]),
 			save_index_cache_to_db(State)
 	end;
 
-update_cache({add_index, CacheDoc}, State) ->
+update_index_cache({add_index, CacheDoc}, State) ->
 	case index_cache_server:add_index(get_index_cache_server_name(index, State), CacheDoc) of
 		ok ->
-			lager:debug("Cache doc: ~w added to cache.", [CacheDoc]),
+			lager:debug("Index cache updated with new cache index doc: ~w.", [CacheDoc]),
 			ok;
 		
 		{ok, full} ->
-			lager:debug("Cache is full. Cleaning."),
+			lager:debug("Index cache updated with new cache index doc: ~w.", [CacheDoc]),
 			save_index_cache_to_db(State)
 	end.
 
@@ -282,9 +300,11 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 	CacheServerName = get_index_cache_server_name(words, State),
 	case words_cache_server:add_word_cache_doc(CacheServerName, CacheWordDoc) of
 		{ok, full} ->
-			words_cache_server:flush_and_add_word_cache_doc(CacheServerName, CacheWordDoc);
+			words_cache_server:flush_and_add_word_cache_doc(CacheServerName, CacheWordDoc),
+			lager:debug("Words cache flushed and updated with new cache word doc: ~p.", [CacheWordDoc]);
 		
 		ok ->
+			lager:debug("Words cache updated with new cache word doc: ~p.", [CacheWordDoc]),
 			ok
 	end.
 
@@ -292,6 +312,7 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 %% Old indicies handling helper functions.
 %% 
 save_index_cache_to_db(State) ->
+	lager:debug("Cleaning index cache."),
 	{ok, CacheDocList} =  index_cache_server:retrieve_all_indicies(get_index_cache_server_name(index, State)),
 	{ok, BucketId} = id_server:get_bucket_id(),
 	Counters = {0, 0},
@@ -346,10 +367,10 @@ spawn_delayed_add_index(Word, UrlId, State) ->
 	spawn(
 	  	fun() -> 
 			timer:sleep(RetryDelay),
-			lager:debug("Retrying to add index for word: ~s with url id: ~p", [Word, UrlId]),
 			persistence_server:retry_add_index(PersistenceServerPid, Word, UrlId) 
 		end
-	  ).
+	  ),
+	lager:debug("Operation: delayed add index - spawned.").
 
 
 spawn_save_word_to_db(CacheWordDoc, State) ->
@@ -360,7 +381,8 @@ spawn_save_word_to_db(CacheWordDoc, State) ->
 			wordsdb_functions:save_word(CacheWordDoc),
 			notification_server:notify(NotificationServerName, save_word_completed)
 		end
-	  ).
+	  ),
+	lager:debug("Operation: save cache word doc to db - spawned.").
 
 
 spawn_save_bucket_to_db(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, State) ->
@@ -371,7 +393,8 @@ spawn_save_bucket_to_db(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, State
 			indexdb_functions:save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList),
 			notification_server:notify(NotificationServerName, new_bucket_operation_completed)
 		end
-	  ).
+	  ),
+	lager:debug("Operation: save bucket to db - spawned.").
 
 
 spawn_update_active_bucket_id(_BucketId, [], _State) ->
@@ -385,7 +408,8 @@ spawn_update_active_bucket_id(BucketId, WordIdToUpdateList, State) ->
 			wordsdb_functions:update_active_bucket_id(WordIdToUpdateList, BucketId),
 			notification_server:notify(NotificationServerName, new_bucket_operation_completed)
 		end
-	  ).
+	  ),
+	lager:debug("Operation: update active bucket id - spawned.").
 
 
 spawn_freeze_indicies_in_bucket(_BucketId, []) ->
@@ -396,11 +420,13 @@ spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList) ->
 	  	fun() ->
 			wordsdb_functions:freeze_bucket_id(WordIdToFreezeList, BucketId)
 		end
-	  ).
+	  ),
+	lager:debug("Operation: freeze indicies in bucket - spawned.").
 
 
 spawn_enqueue_indicies_to_delete(CacheDocList, CleanerServerName) ->
-	spawn(?MODULE, enqueue_indicies_to_delete, [CacheDocList, CleanerServerName]).	
+	spawn(?MODULE, enqueue_indicies_to_delete, [CacheDocList, CleanerServerName]),
+	lager:debug("Operation: enqueue indicies to delete - spawned.").
 	
 
 wait_for_save_word_operations_to_complete(NotificationServerName) ->

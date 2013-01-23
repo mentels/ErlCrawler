@@ -32,9 +32,7 @@ freeze_bucket_id(WordIdList, BucketId) ->
 save_word_internal({Word, WordId, ActiveBucketId}) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
 	DbWordDoc = create_db_word_doc(WordId, Word, ActiveBucketId),
-	db_helper:perform_action({insert, DbWordDoc}, ConnCfg),
-	lager:debug("New db word doc saved: ~p.", [DbWordDoc]),
-	{ok, {WordId, unspec}}.
+	db_helper:perform_action({insert, DbWordDoc}, ConnCfg).
 
 
 create_db_word_doc(WordId, Word, ActiveBucketId) when ActiveBucketId == unspec ->
@@ -66,13 +64,11 @@ update_active_bucket_id_internal(WordIdList, BucketId) ->
 	SelectorDoc = {'_id', { bson:utf8("$in"), WordIdList}},
 	ModifierDoc = { bson:utf8("$set"), {active_bucket_id, BucketId}},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
-	db_helper:perform_action({modify, SelectorDoc, ModifierDoc}, ConnCfg),
-	lager:debug("Active bucket id: ~p updated for word id: ~w", [BucketId, WordIdList]).
+	db_helper:perform_action({modify, SelectorDoc, ModifierDoc}, ConnCfg).
 		
 
 freeze_bucket_id_internal(WordIdList, BucketId) ->
 	SelectorDoc = {'_id', { bson:utf8("$in"), WordIdList}},
 	ModifierDoc = { bson:utf8("$push"), {frozen_bucket_id, BucketId}},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
-	db_helper:perform_action({modify, SelectorDoc, ModifierDoc}, ConnCfg),
-	lager:debug("Bucket id: ~p frozen for word id: ~w", [BucketId, WordIdList]).
+	db_helper:perform_action({modify, SelectorDoc, ModifierDoc}, ConnCfg).

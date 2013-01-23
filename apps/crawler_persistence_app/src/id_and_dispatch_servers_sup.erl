@@ -28,7 +28,7 @@ init(_StartArgs) ->
 
 	%% Set id server.
 	IdCfg = config_helper:get_server_config(id_server),
-	IdServerSpec = ?CHILD(id_server, worker, IdCfg, brutal_kill),
+	IdServerSpec = ?CHILD(id_server, worker, IdCfg, infinity),
 	
 	% Set dispatcher server.
 	[ChannelsCfg] = config_helper:get_channels_config(),
