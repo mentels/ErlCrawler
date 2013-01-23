@@ -10,14 +10,14 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 1000}
+  		{channels_cnt, 100}
   	]},
   	{persistence_cfg, [
   		{max_cache_doc_size, 3000},
   		{retry_delay, 5000}
   	]},
   	{conn_manager_cfg, [
-  		{pool_size, 5000},
+  		{pool_size, 500},
   		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
@@ -35,7 +35,7 @@
         {max_cache_size, 6000}  					
  	]},
  	{words_cache_cfg, [
-        {max_cache_size, 1000}  					
+        {max_cache_size, 3000}  					
  	]}
   ]}
  ]}.
