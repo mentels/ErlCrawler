@@ -26,7 +26,7 @@ report(Url_id, Url, Redirected_url, Source, Status)->
 		ok -> 
 			Urls = processing_handler:process_data(Url_id, Url, Source),
 			%%file:write_file(string:join(string:tokens(Url,":/_?.="),""), Urls),
-			lager:log(notice,self(),[string:concat("Pobrano ",Url)]);
+			lager:log(debug,self(),[string:concat("Pobrano ",Url)]);
 		error ->
-			lager:log(error,self(),[string:concat("Byl problem z ",Url)])
+			lager:log(warning,self(),[string:concat("Byl problem z ",Url)])
 	end.
