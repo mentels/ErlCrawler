@@ -7,6 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/1, add_index/3, retry_add_index/3, prepare_to_stop/1]).
+-export([enqueue_indicies_to_delete/2]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -49,8 +50,8 @@ init([HelperServersCfg, PersistenceCfg]) ->
 
 handle_call({prepare_to_stop}, _From, State) ->
 	lager:debug("Cleaning persistence subsytem before stopping..."),
-	handle_old_indices(State),
-	db_cleaner_server:flush_cache(get_cache_server_name(index, State)),
+	save_index_cache_to_db(State),
+	db_cleaner_server:flush_cache(get_index_cache_server_name(index, State)),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -92,7 +93,7 @@ code_change(_OldVsn, State, _Extra) ->
 get_word_data(Word, State) ->
 	case get_word_data_from_cache(Word, State) of
 		word_not_found ->
-			lager:debug("Word ~s not found in cache.", [Word]),
+			lager:debug("Word ~p not found in cache.", [Word]),
 			case get_word_data_from_db(Word) of
 				no_word ->
 					{Word, WordId, BucketId} = create_new_cache_word_doc(Word),
@@ -100,13 +101,13 @@ get_word_data(Word, State) ->
 					spawn_save_word_to_db({Word, WordId, BucketId}, State),
 					{WordId, BucketId};
 				
-				{ok, {WordId, BucketId}} ->
+				{WordId, BucketId} ->
 					update_words_cache({add_word_cache_doc, {Word, WordId, BucketId}}, State),
 					{WordId, BucketId}
 				
 			end;
 		
-		{ok, WordData} ->
+		WordData ->
 			WordData
 	
 	end.
@@ -155,21 +156,28 @@ add_index(WordId, BucketId, UrlId, State) ->
 	end.
 
 
+enqueue_indicies_to_delete([], _) ->
+	ok;
+	
+enqueue_indicies_to_delete([{WordId, _, _, OldBucketId, InitUrlIdListSize} | T], CleanerServerName) ->
+	db_cleaner_server:add_index_to_delete(CleanerServerName, OldBucketId, InitUrlIdListSize, WordId),
+	enqueue_indicies_to_delete(T, CleanerServerName).
+
 %%%
 %%% Word data obtaining helper functions.
 %%%
 get_word_data_from_cache(Word, State) ->
-	{ok, WordData} = words_cache_server:get_word_data(get_cache_server_name(words, State), Word),
+	{ok, WordData} = words_cache_server:get_word_data(get_index_cache_server_name(words, State), Word),
 	WordData.
 
 get_word_data_from_db(Word) ->
-	wordsdb_functions:get_word_data(Word).
+	WordData = wordsdb_functions:get_word_data(Word).
 
 %%
 %% Index obtaining helper functions.
 %%
 get_index_data_from_cache(WordId, State) ->
-	{ok, IndexData} = cache_server:get_index_data(get_cache_server_name(index, State), WordId),
+	{ok, IndexData} = index_cache_server:get_index_data(get_index_cache_server_name(index, State), WordId),
 	IndexData.
 
 
@@ -240,25 +248,25 @@ create_new_cache_doc(WordId, UrlId) ->
 
 
 update_cache({update_index_data, WordId, IndexData}, State) ->
-	case cache_server:update_index_data(get_cache_server_name(index, State), WordId, IndexData) of
+	case index_cache_server:update_index_data(get_index_cache_server_name(index, State), WordId, IndexData) of
 		ok ->
 			lager:debug("Index data: ~w updated for word id: ~p.", [IndexData, WordId]),
 			ok;
 		
 		{ok, full} ->
 			lager:debug("Cache is full. Cleaning."),
-			handle_old_indices(State)
+			save_index_cache_to_db(State)
 	end;
 
 update_cache({add_index, CacheDoc}, State) ->
-	case cache_server:add_index(get_cache_server_name(index, State), CacheDoc) of
+	case index_cache_server:add_index(get_index_cache_server_name(index, State), CacheDoc) of
 		ok ->
 			lager:debug("Cache doc: ~w added to cache.", [CacheDoc]),
 			ok;
 		
 		{ok, full} ->
 			lager:debug("Cache is full. Cleaning."),
-			handle_old_indices(State)
+			save_index_cache_to_db(State)
 	end.
 
 
@@ -271,43 +279,44 @@ create_new_cache_word_doc(Word) ->
 
 
 update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
-	words_cache_server:add_word_cache_doc(get_cache_server_name(words, State), CacheWordDoc).
-
+	CacheServerName = get_index_cache_server_name(words, State),
+	case words_cache_server:add_word_cache_doc(CacheServerName, CacheWordDoc) of
+		{ok, full} ->
+			words_cache_server:flush_and_add_word_cache_doc(CacheServerName, CacheWordDoc);
+		
+		ok ->
+			ok
+	end.
 
 %%
 %% Old indicies handling helper functions.
 %% 
-handle_old_indices(State) ->
-	case cache_server:retrieve_all_indicies(get_cache_server_name(index, State)) of
-		{ok, []} ->
-			ok;
-		
-		{ok, CacheDocList} ->
-			{ok, BucketId} = id_server:get_bucket_id(),
-			Counters = {0, 0},
-			Lists = {[], [], []},
-			handle_old_indicies(CacheDocList, BucketId, Counters, Lists, State)
-	end.
+save_index_cache_to_db(State) ->
+	{ok, CacheDocList} =  index_cache_server:retrieve_all_indicies(get_index_cache_server_name(index, State)),
+	{ok, BucketId} = id_server:get_bucket_id(),
+	Counters = {0, 0},
+	Lists = {[], [], []},
+	spawn_enqueue_indicies_to_delete(CacheDocList, get_index_cache_server_name(cleaner, State)),
+	save_index_cache_to_db(CacheDocList, BucketId, Counters, Lists, State).
 
 
-handle_old_indicies([CacheDoc | T], BucketId, Counters, Lists, State) ->
-	{WordId, UrlIdList, UrlIdListSize, OldBucketId, InitUrlIdListSize} = CacheDoc,
+save_index_cache_to_db([CacheDoc | T], BucketId, Counters, Lists, State) ->
+	{WordId, UrlIdList, UrlIdListSize, _, _} = CacheDoc,
 	{WordCnt, UrlCnt} = Counters,
 	{IncompleteCacheDocList, WordIdToUpdateList, WordIdToFreezeList} = Lists,
-	enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId, State),
 	IncompleteCacheDoc = {WordId, UrlIdList, UrlIdListSize},
 	NewCounters = {WordCnt + 1, UrlCnt + UrlIdListSize},
 	case is_url_id_list_size_max(UrlIdListSize, State) of
 		true ->
 			NewLists = {[IncompleteCacheDoc | IncompleteCacheDocList], WordIdToUpdateList, [WordId | WordIdToFreezeList]},
-			handle_old_indicies(T, BucketId, NewCounters, NewLists, State);
+			save_index_cache_to_db(T, BucketId, NewCounters, NewLists, State);
 		
 		false ->
 			NewLists = {[ IncompleteCacheDoc | IncompleteCacheDocList], [WordId | WordIdToUpdateList], WordIdToFreezeList},
-			handle_old_indicies(T, BucketId, NewCounters, NewLists, State)
+			save_index_cache_to_db(T, BucketId, NewCounters, NewLists, State)
 	end;
 
-handle_old_indicies([], BucketId, Counters, Lists, State) ->
+save_index_cache_to_db([], BucketId, Counters, Lists, State) ->
 	{WordCnt, UrlCnt} = Counters,
 	{IncompleteCacheDocList, WordIdToUpdateList, WordIdToFreezeList} = Lists,
 	
@@ -324,16 +333,9 @@ handle_old_indicies([], BucketId, Counters, Lists, State) ->
 	spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList),
 	
 	%% Flush words cache and wait for new bucket operations to complete.
-	words_cache_server:flush(get_cache_server_name(words, State)),
+	words_cache_server:flush(get_index_cache_server_name(words, State)),
 	wait_for_new_bucket_operations_to_complete(get_state_value(notification_server_name, State)).
 		
-
-enqueue_index_to_delete(unspec, unspec, _WordId, _State) ->
-	ok;
-
-enqueue_index_to_delete(OldBucketId, InitUrlIdListSize, WordId, State) ->
-	db_cleaner_server:add_index_to_delete(get_cache_server_name(index, State), OldBucketId, InitUrlIdListSize, WordId).
-
 
 %%
 %% Spawning helper functions.
@@ -395,6 +397,10 @@ spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList) ->
 			wordsdb_functions:freeze_bucket_id(WordIdToFreezeList, BucketId)
 		end
 	  ).
+
+
+spawn_enqueue_indicies_to_delete(CacheDocList, CleanerServerName) ->
+	spawn(?MODULE, enqueue_indicies_to_delete, [CacheDocList, CleanerServerName]).	
 	
 
 wait_for_save_word_operations_to_complete(NotificationServerName) ->
@@ -443,13 +449,13 @@ is_bucket_in_db(BucketId) ->
 %%
 %% Cache server names helper functions.
 %%
-get_cache_server_name(words, State) ->
+get_index_cache_server_name(words, State) ->
 	get_state_value(words_cache_server_name, State);
 
-get_cache_server_name(index, State) ->
+get_index_cache_server_name(index, State) ->
 	get_state_value(index_cache_server_name, State);
 
-get_cache_server_name(cleaner, State) ->
+get_index_cache_server_name(cleaner, State) ->
 	get_state_value(cleaner_cache_server_name, State).
 
 %%

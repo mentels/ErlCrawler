@@ -47,10 +47,10 @@ init(ChannelId) ->
 										 [DbCleanerServerName, DbCleanerCfg], infinity),
 	
 	%% Set index cache server.
-	CacheServerCfg = config_helper:get_server_config(cache_server),
-	CacheServerName = config_helper:get_worker_name(cache_server, ChannelId),
-	CacheServerSpec = ?CHILD_CHANNEL(CacheServerName, cache_server, worker, 
-									 [CacheServerName, CacheServerCfg], infinity),
+	IndexCacheServerCfg = config_helper:get_server_config(index_cache_server),
+	IndexCacheServerName = config_helper:get_worker_name(index_cache_server, ChannelId),
+	IndexCacheServerSpec = ?CHILD_CHANNEL(IndexCacheServerName, index_cache_server, worker, 
+									 [IndexCacheServerName, IndexCacheServerCfg], infinity),
 	
 	%% Set words cache server.
 	WordsCacheServerCfg = config_helper:get_server_config(words_cache_server),
@@ -61,12 +61,12 @@ init(ChannelId) ->
 	%% Set persistence server.
 	PersistenceCfg = config_helper:get_server_config(persistence_server),
 	PersistenceServerName = config_helper:get_worker_name(persistence_server, ChannelId),
-	HelperServersCfg = {{words_cache_server_name, WordsCacheServerName},{index_cache_server_name, CacheServerName}, 
+	HelperServersCfg = {{words_cache_server_name, WordsCacheServerName},{index_cache_server_name, IndexCacheServerName}, 
 				 {cleaner_cache_server_name, DbCleanerServerName}, {notification_server_name, NotificationServerName}},
 	PersistenceServerSpec = ?CHILD_CHANNEL(PersistenceServerName, persistence_server, worker,
 										   [PersistenceServerName, HelperServersCfg, PersistenceCfg], infinity),
 	
-    ChildrenSpecs = [NotificationServerSpec, DbCleanerServerSpec, CacheServerSpec, WordsCacheServerSpec, PersistenceServerSpec],
+    ChildrenSpecs = [NotificationServerSpec, DbCleanerServerSpec, IndexCacheServerSpec, WordsCacheServerSpec, PersistenceServerSpec],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 

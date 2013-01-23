@@ -1,4 +1,4 @@
--module(cache_server).
+-module(index_cache_server).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 

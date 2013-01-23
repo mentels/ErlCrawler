@@ -31,7 +31,7 @@
  		{max_word_id_cnt, 2000},
         {max_unused_url_id_cnt_percentage, 50}			
  	]},
- 	{cache_cfg, [
+ 	{index_cache_cfg, [
         {max_cache_size, 5000}  					
  	]},
  	{words_cache_cfg, [

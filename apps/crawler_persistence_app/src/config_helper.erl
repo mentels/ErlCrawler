@@ -55,8 +55,8 @@ get_server_config_internal(db_cleaner_server) ->
 	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
 	DbCleanerCfg;
 
-get_server_config_internal(cache_server) ->
-	{ok, CacheServerCfg} = application:get_env(cache_cfg),
+get_server_config_internal(index_cache_server) ->
+	{ok, CacheServerCfg} = application:get_env(index_cache_cfg),
 	CacheServerCfg;
 
 get_server_config_internal(conn_manager_server) ->
