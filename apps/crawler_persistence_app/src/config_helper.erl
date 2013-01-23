@@ -4,27 +4,37 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([get_config/1, set_indexes/0]).
+-export([get_server_config/1, get_channels_config/0, set_indexes/0, get_worker_name/2]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-get_config(ServerName) ->
-	get_config_internal(ServerName).
+get_server_config(ServerName) ->
+	get_server_config_internal(ServerName).
+
+
+get_channels_config() ->
+	get_channels_config_internal().
+
 
 set_indexes() ->
 	set_indexes_internal().
+
+
+get_worker_name(WorkerModule, ChannelId) ->
+	list_to_atom(atom_to_list(WorkerModule) ++ "_ch" ++ integer_to_list(ChannelId)). 
+
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-get_config_internal(persistence_server) ->
+get_server_config_internal(persistence_server) ->
 	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
 	PersistenceCfg;
 
-get_config_internal(id_server) ->
+get_server_config_internal(id_server) ->
 	{ok, IdCfg}  = application:get_env(id_cfg),
 	case get_max_word_id_and_bucket_id() of
 		{no_id, no_id} ->
@@ -41,28 +51,29 @@ get_config_internal(id_server) ->
 	
 	end;
 
-get_config_internal(worddb_server) ->
-	{ok, WordDbCfg} = application:get_env(word_db_cfg),
-	WordDbCfg;
-
-get_config_internal(indexdb_server) ->
-	{ok, IndexDbCfg} = application:get_env(index_db_cfg),
-	IndexDbCfg;
-
-get_config_internal(db_cleaner_server) ->
+get_server_config_internal(db_cleaner_server) ->
 	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
 	DbCleanerCfg;
 
-get_config_internal(cache_server) ->
-	{ok, CacheServerCfg} = application:get_env(cache_cfg),
+get_server_config_internal(index_cache_server) ->
+	{ok, CacheServerCfg} = application:get_env(index_cache_cfg),
 	CacheServerCfg;
 
-get_config_internal(conn_manager_server) ->
+get_server_config_internal(conn_manager_server) ->
 	{ok, ConnManagerCfg} = application:get_env(conn_manager_cfg),
 	ConnManagerCfg;
 
-get_config_internal(_Other) ->
+get_server_config_internal(words_cache_server) ->
+	{ok, WordsCacheCfg} = application:get_env(words_cache_cfg),
+	WordsCacheCfg;
+
+get_server_config_internal(_Other) ->
 	undefined.
+
+
+get_channels_config_internal() ->
+	{ok, ChannelsCfg} = application:get_env(channels_cfg),
+	ChannelsCfg.
 
 
 set_indexes_internal() ->

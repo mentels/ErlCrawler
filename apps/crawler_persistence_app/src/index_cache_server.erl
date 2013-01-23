@@ -1,4 +1,4 @@
--module(cache_server).
+-module(index_cache_server).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
@@ -6,8 +6,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/1, update_index_data/2, get_index_data/1, retrieve_all_indicies/0]).
--export([get_state/0]).
+-export([start_link/1, add_index/2, update_index_data/3, get_index_data/2, retrieve_all_indicies/1]).
+-export([get_state/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -20,32 +20,33 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(CacheCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, CacheCfg, []).
+start_link([ServerName, CacheCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, CacheCfg], []).
 
-add_index(CacheDoc) ->
-	gen_server:call(?SERVER, {add_index, CacheDoc}).
+add_index(ServerName, CacheDoc) ->
+	gen_server:call(ServerName, {add_index, CacheDoc}).
 
-update_index_data(WordId, IndexData) ->
-	gen_server:call(?SERVER, {update_index_data, WordId, IndexData}).
+update_index_data(ServerName, WordId, IndexData) ->
+	gen_server:call(ServerName, {update_index_data, WordId, IndexData}).
 
-get_index_data(WordId) ->
-	gen_server:call(?SERVER, {get_index_data, WordId}).
+get_index_data(ServerName, WordId) ->
+	gen_server:call(ServerName, {get_index_data, WordId}).
 
-retrieve_all_indicies() ->
-	gen_server:call(?SERVER, {retrieve_all_indicies}).
+retrieve_all_indicies(ServerName) ->
+	gen_server:call(ServerName, {retrieve_all_indicies}).
 
-get_state() ->
-	gen_server:call(?SERVER, {get_state}).
+get_state(ServerName) ->
+	gen_server:call(ServerName, {get_state}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(CacheCfg) ->
+init([ServerName, CacheCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheSizeCfg] = CacheCfg,
-	CacheTabId = ets:new(index_cache, [set, {keypos, 1}, private, named_table]),
+	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cache"),
+	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
 	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg},
     {ok, State}.
 
@@ -56,7 +57,6 @@ handle_call({add_index, CacheDoc}, _From, State) ->
 		false -> 
 			{reply, ok, UpdatedState};
 		true ->
-			lager:debug("After adding cache doc: ~w the cache sie full.", [CacheDoc]),
 			{reply, {ok, full}, UpdatedState}
 	end;
 
@@ -66,12 +66,11 @@ handle_call({update_index_data, WordId, IndexData}, _From, State) ->
 		false -> 
 			{reply, ok, UpdatedState};
 		true ->
-			lager:debug("After updating index for word id: ~p the cache sie full.", [WordId]),
 			{reply, {ok, full}, UpdatedState}
 	end;
 
 handle_call({get_index_data, WordId}, _From, State) ->
-	case get_index_data(WordId, State) of
+	case get_index_data_internal(WordId, State) of
 		{} -> 	
 			{reply, {ok, index_not_found}, State};
 		IndexData ->	
@@ -97,11 +96,9 @@ handle_info(_Info, State) ->
 
 
 terminate(shutdown, _State) ->
-	lager:debug("Cache server terminating for shutdown reason."),
 	ok;
 
-terminate(Reason, _State) ->
-	lager:debug("Cache server terminating for reason: ~p", [Reason]),
+terminate(_Reason, _State) ->
     ok.
 
 
@@ -113,7 +110,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 
-get_index_data(WordId, State) ->
+get_index_data_internal(WordId, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
 	case ets:match(CacheTabId, {WordId, '$0', '$1', '_', '_'}) of
 		[] ->
@@ -121,7 +118,6 @@ get_index_data(WordId, State) ->
 
 		[[UrlIdList, UrlIdListSize]] ->
 			IndexData = {UrlIdList, UrlIdListSize},
-			lager:debug("Index data returned: ~w", [IndexData]),
 			IndexData
 
 	end.
@@ -133,21 +129,18 @@ update_state({add_index, CacheDoc}, State) ->
 	{_, _, UrlIdListSize, _, _} = CacheDoc,
 	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
 	ets:insert(CacheTabId, CacheDoc),
-	lager:debug("New cache doc created: ~w; new size is: ~p", [CacheDoc, Size + UrlIdListSize]),
 	update_state_value({size, Size + UrlIdListSize}, State);
 
 update_state({update_index_data, WordId, IndexData}, State) ->
 	{UrlIdList, UrlIdListSize} = IndexData,
 	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
 	ets:update_element(CacheTabId, WordId, [{2, UrlIdList}, {3, UrlIdListSize}]),
-	lager:debug("Cache doc for word id: ~p; updated with new index data: ~w", [WordId, IndexData]),
-	update_state_value({size, Size + UrlIdListSize}, State);
+	update_state_value({size, Size + 1}, State);
 
 update_state({retrieve_all_indicies}, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
 	CacheDocList = ets:match_object(CacheTabId, '$1'),
 	ets:delete_all_objects(CacheTabId),
-	lager:debug("All indicies retrieved: ~w.", [CacheDocList]),
 	{CacheDocList, update_state_value({size, 0}, State)}.
 
 
