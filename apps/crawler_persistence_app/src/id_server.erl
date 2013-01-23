@@ -43,9 +43,13 @@ init(IdCfg) ->
     {ok, State}.
 
 handle_call(get_word_id, _From, {WordId, _BucketId}) ->
+	lager:info("Serving request: get_word_id. Mailbox queue size: ~p", 
+				[element(2,erlang:process_info(self(), message_queue_len)) ]),
 	{reply, {ok, WordId}, {WordId + 1, _BucketId}};
 
 handle_call(get_bucket_id, _From, {_WordId, BucketId}) ->
+	lager:info("Serving request: get_bucket_id. Mailbox queue size: ~p", 
+				[element(2,erlang:process_info(self(), message_queue_len)) ]),
 	{reply, {ok, BucketId}, {_WordId, BucketId + 1}};
 
 handle_call(_Request, _From, State) ->
