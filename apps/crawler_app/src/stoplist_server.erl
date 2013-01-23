@@ -18,7 +18,7 @@ start_link(_) ->
 init(_) ->
 	{ok,Stoplists} = application:get_env(stoplists),
 	T = ets:new(tab,[]),
-	%% insert_stoplists(T,Stoplists),
+	insert_stoplists(T,Stoplists),
 	
 	{ok,EngFile} = application:get_env(eng_words),
 	{ok, Binary} = file:read_file(EngFile),
