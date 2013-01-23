@@ -17,7 +17,9 @@
 
 pull(_Number)->
 	Url = link_server:get_link(),
-	[{12,Url}].
+	{A1,A2,A3} = now(),
+    random:seed(A1, A2, A3),
+	[{random:uniform(2000000),Url}].
 
 report(Url_id, Url, Redirected_url, Source, Status)->
 	case Status of

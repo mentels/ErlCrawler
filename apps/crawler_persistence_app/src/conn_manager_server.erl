@@ -44,16 +44,12 @@ init(ConnManagerCfg) ->
 handle_call({get_conn_cfg_for_words_coll}, _From, State) ->
 	{Pool, DbName, WordsCollName} = get_state_value(pool_and_dbname_and_words_collname, State),
 	{ok, Conn} = resource_pool:get(Pool),
-	ConnCfg = {WordsCollName, DbName, Conn},
-	lager:debug("Conn cfg returend: ~p", [ConnCfg]),
-	{reply, {ok, ConnCfg}, State};
+	{reply, {ok, {WordsCollName, DbName, Conn}}, State};
 	
 handle_call({get_conn_cfg_for_index_coll}, _From, State) ->
 	{Pool, DbName, IndexCollName} = get_state_value(pool_and_dbname_and_index_collname, State),
 	{ok, Conn} = resource_pool:get(Pool),
-	ConnCfg = {IndexCollName, DbName, Conn},
-	lager:debug("Conn cfg returend: ~p", [ConnCfg]),
-	{reply, {ok, ConnCfg}, State};
+	{reply, {ok, {IndexCollName, DbName, Conn}}, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
@@ -69,12 +65,10 @@ handle_info(_Info, State) ->
 
 terminate(shutdown, State) ->
   	close_pool(State),
-  	lager:debug("Connection manager server terminating for shutdown reason."),
 	ok;
   
-terminate(Reason, State) ->
+terminate(_Reason, State) ->
 	close_pool(State),
-  	lager:debug("Connection manager server terminating for ~s reason.", [Reason]),
     ok.
 
 
