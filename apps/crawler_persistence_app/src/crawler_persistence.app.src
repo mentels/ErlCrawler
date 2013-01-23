@@ -17,7 +17,7 @@
   		{retry_delay, 5000}
   	]},
   	{conn_manager_cfg, [
-  		{pool_size, 500},
+  		{pool_size, 5000},
   		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
