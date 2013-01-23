@@ -63,6 +63,10 @@ get_server_config_internal(conn_manager_server) ->
 	{ok, ConnManagerCfg} = application:get_env(conn_manager_cfg),
 	ConnManagerCfg;
 
+get_server_config_internal(words_cache_server) ->
+	{ok, WordsCacheCfg} = application:get_env(words_cache_cfg),
+	WordsCacheCfg;
+
 get_server_config_internal(_Other) ->
 	undefined.
 
