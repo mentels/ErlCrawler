@@ -22,13 +22,15 @@ process_data(Url_id, Url, Source)->
 	
 save_url([],_)->
 	ok;
-save_url([H|T],Url_id) ->
+save_url([H|T],Url_id) when length(H) > 1->
 	%% Jesli slowa nie ma na stopliscie a jest w slowniku, to zapisujemy
 	Word = string:to_lower(string:strip(H, both)),
 	case stoplist_server:check_word(Word) of
 		true ->crawler_persistence:add_index(Word,Url_id);
 		_ -> ok
 	end,
+	save_url(T,Url_id);
+save_url([H|T],Url_id) ->
 	save_url(T,Url_id).
 
 %% Wyciaga slowa i zleca ich zapisanie do bazy

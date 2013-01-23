@@ -34,8 +34,8 @@ start() ->
     gen_server:start({local, link_server}, link_server, ["urls"], []). %% TODO : Olać Max download workers z konfiguracji
 
 init([FileName]) ->
-	Urls = readlines(FileName),
-    {ok, #state{links=Urls,no=1}}.
+	{ok, Urls} = file:read_file(FileName),
+    {ok, {Urls,1}}.
 
 readlines(FileName) ->
     {ok, Device} = file:open(FileName, [read]),
@@ -67,17 +67,18 @@ get_link()->
 	Reason :: term().
 
 %% ====================================================================
-handle_call(get_link, From, {state, Urls, No}=State) ->
-	case lists:flatlength(Urls) of
-		0 ->
-			Reply = [],
+handle_call(get_link, From, {Urls, No}=State) ->
+	[Url,Rest] = binary:split(Urls, [<<"\n">>]),
+	Reply = binary_to_list(Url),
+	if
+    	Rest == <<>> ->
 			lager:log(notice,self(),"LINK_SERVER_PRZETWORZYL_WSZYSTKIE_ADRESY");
+    	true ->
+        	ok
+	end,			 
 			%% application:stop(crawler),
 			%% application:stop(crawler_persistence);
-		_ ->
-			Reply = lists:nth(random:uniform(erlang:length(Urls)),Urls)
-	end,
-    {reply, Reply, {state, lists:delete(Reply, Urls), No+1}}.
+    {reply, Reply, { Rest, No+1}}.
 
 
 %% handle_cast/2
