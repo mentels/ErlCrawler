@@ -59,13 +59,13 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({add_index, Word, UrlId}, State) ->
-	lager:debug("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
+	lager:info("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
 				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(first_try, Word, UrlId, State),
 	{noreply, State};
 
 handle_cast({retry_add_index, Word, UrlId}, State) ->
-	lager:debug("Serving request: {retry_add_index, ~p, ~p}. Mailbox queue size: ~p", 
+	lager:info("Serving request: {retry_add_index, ~p, ~p}. Mailbox queue size: ~p", 
 				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(retry, Word, UrlId, State),
 	{noreply, State};
