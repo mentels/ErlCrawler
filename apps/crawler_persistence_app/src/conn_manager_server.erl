@@ -42,11 +42,15 @@ init(ConnManagerCfg) ->
 
 
 handle_call({get_conn_cfg_for_words_coll}, _From, State) ->
+	lager:info("Serving request: get_conn_cfg_for_words_coll. Mailbox queue size: ~p", 
+				[element(2,erlang:process_info(self(), message_queue_len)) ]),
 	{Pool, DbName, WordsCollName} = get_state_value(pool_and_dbname_and_words_collname, State),
 	{ok, Conn} = resource_pool:get(Pool),
 	{reply, {ok, {WordsCollName, DbName, Conn}}, State};
 	
 handle_call({get_conn_cfg_for_index_coll}, _From, State) ->
+	lager:info("Serving request: get_conn_cfg_for_index_coll. Mailbox queue size: ~p", 
+				[element(2,erlang:process_info(self(), message_queue_len)) ]),
 	{Pool, DbName, IndexCollName} = get_state_value(pool_and_dbname_and_index_collname, State),
 	{ok, Conn} = resource_pool:get(Pool),
 	{reply, {ok, {IndexCollName, DbName, Conn}}, State};
