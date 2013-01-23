@@ -6,7 +6,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/2, prepare_to_stop/0]).
+-export([start_link/1, add_index/2, retry_add_index/2, prepare_to_stop/0]).
+-export([delayed_add_index/3]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -22,11 +23,18 @@
 start_link(PersistenceCfg) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, PersistenceCfg, []).
 
-prepare_to_stop() ->
-	gen_server:call(?SERVER, {prepare_to_stop}).
 
 add_index(Word, UrlId) ->
 	gen_server:cast(?SERVER, {add_index, Word, UrlId}).
+
+
+retry_add_index(Word, UrlId) ->
+	gen_server:cast(?SERVER, {retry_add_index, Word, UrlId}).
+
+
+prepare_to_stop() ->
+	gen_server:call(?SERVER, {prepare_to_stop}).
+
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -34,8 +42,8 @@ add_index(Word, UrlId) ->
 
 init(PersistenceCfg) ->
 	process_flag(trap_exit, true),
-	[MaxCacheDocSizeCfg] = PersistenceCfg, 
-	State = MaxCacheDocSizeCfg,
+	[MaxCacheDocSizeCfg, RetryCfg] = PersistenceCfg, 
+	State = [MaxCacheDocSizeCfg, RetryCfg],
     {ok, State}.
 
 
@@ -50,9 +58,12 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({add_index, Word, UrlId}, State) ->
-	{WordId, BucketId} = add_word(Word),
-	lager:debug("Adding index: word id: ~p; bucket id: ~p; url id: ~p", [WordId, BucketId, UrlId]),
-	add_index(WordId, BucketId, UrlId, State),
+	lager:debug("Mailbox queue size: ~p", [erlang:process_info(self(), message_queue_len)]),
+	add_index(first_try, Word, UrlId, State),
+	{noreply, State};
+
+handle_cast({retry_add_index, Word, UrlId}, State) ->
+	add_index(retry, Word, UrlId, State),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -78,10 +89,31 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-add_word(Word) ->
+get_word_data(Word) ->
 	{ok, WordData} = wordsdb_functions:save_word(Word),
 	WordData.
 
+
+add_index(first_try, Word, UrlId, State) ->
+	{WordId, BucketId} = get_word_data(Word),
+	lager:debug("Adding index: word id: ~p; bucket id: ~p; url id: ~p.", [WordId, BucketId, UrlId]),
+	try add_index(WordId, BucketId, UrlId, State)
+	catch
+		error:no_word_in_index ->
+			spawn(?MODULE, delayed_add_index, [Word, UrlId, get_state_value(retry_delay, State)]);
+		
+		error:no_bucket_in_index ->	
+			spawn(?MODULE, delayed_add_index, [Word, UrlId, get_state_value(retry_delay, State)])
+	end;
+
+add_index(retry, Word, UrlId, State) ->
+	{WordId, BucketId} = get_word_data(Word),
+	lager:debug("Retrying to add index: word id: ~p; bucket id: ~p; url id: ~p.", [WordId, BucketId, UrlId]),
+	try add_index(WordId, BucketId, UrlId, State)
+	catch
+		error:_ ->
+			lager:debug("Retry failed.")
+	end;
 
 add_index(WordId, BucketId, UrlId, State) ->
 	case get_index_data_from_cache(WordId) of
@@ -98,14 +130,17 @@ add_index(WordId, BucketId, UrlId, State) ->
 					update_cache({add_index, create_new_cache_doc(WordId, UrlId)}, State)
 			end;
 		
-		unexpected ->
-			to_do;
-		
 		IndexData ->
 			UpdatedIndexData = update_index_data(IndexData, UrlId),
 			update_cache({update_index_data, WordId, UpdatedIndexData}, State)
 			
 	end.
+
+
+delayed_add_index(Word, UrlId, SleepTime) ->
+	timer:sleep(SleepTime),
+	lager:debug("Retrying to add index for word: ~s with url id: ~p", [Word, UrlId]),
+	persistence_server:retry_add_index(Word, UrlId).
 
 
 %%
@@ -120,11 +155,11 @@ get_index_from_db(BucketId, WordId) ->
 	case indexdb_functions:get_index(BucketId, WordId) of
 		{ok, no_word} ->
 			lager:error("No word id: ~p found in bucket id: ~p", [WordId, BucketId]),
-			unexpected;
+			erlang:error(no_word_in_index);
 		
 		{ok, no_bucket} ->
 			lager:error("No bucket id found: ~p", [BucketId]),
-			unexptected;
+			erlang:error(no_bucket_in_index);
 		
 		{ok, IncompleteCacheDoc} -> 
 			IncompleteCacheDoc
@@ -293,5 +328,8 @@ is_bucket_in_db(BucketId) ->
 %%
 %% State handling helper functions.
 %% 
-get_state_value(max_cache_doc_size, {max_cache_doc_size, Value}) ->
+get_state_value(max_cache_doc_size, [{max_cache_doc_size, Value}, _]) ->
+	Value;
+
+get_state_value(retry_delay, [_, {retry_delay, Value}]) ->
 	Value.

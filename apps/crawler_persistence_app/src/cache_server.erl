@@ -144,10 +144,10 @@ update_state({update_index_data, WordId, IndexData}, State) ->
 	update_state_value({size, Size + UrlIdListSize}, State);
 
 update_state({retrieve_all_indicies}, State) ->
-	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
+	CacheTabId = get_state_value(cache_tab_id, State),
 	CacheDocList = ets:match_object(CacheTabId, '$1'),
 	ets:delete_all_objects(CacheTabId),
-	lager:debug("All indicies retrieved: ~w.", [CacheDocList, Size]),
+	lager:debug("All indicies retrieved: ~w.", [CacheDocList]),
 	{CacheDocList, update_state_value({size, 0}, State)}.
 
 
