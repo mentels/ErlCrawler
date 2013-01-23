@@ -13,10 +13,10 @@ start(_StartType, StartArgs) ->
 	lager:start(),
 	application:start(mongodb),
 	application:start(bson),
-    primary_sup:start_link(StartArgs).
+    crawler_persistence_sup:start_link(StartArgs).
 
 prep_stop(_) ->
-    persistence_server:prepare_to_stop().
+    dispatch_server:prepare_to_stop().
 
 stop(_State) ->
 	ok.

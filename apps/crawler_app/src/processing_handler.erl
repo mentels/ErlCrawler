@@ -25,7 +25,7 @@ save_url([],_)->
 save_url([H|T],Url_id) ->
 	%% Jesli slowa nie ma na stopliscie, to zapisujemy
 	case stoplist_server:check_word(H) of
-		false -> persistence_server:add_index(H,Url_id);
+		false -> crawler_persistence:add_index(H,Url_id);
 		_ -> ok
 	end,
 	save_url(T,Url_id).

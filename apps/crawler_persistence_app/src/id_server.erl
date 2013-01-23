@@ -43,11 +43,9 @@ init(IdCfg) ->
     {ok, State}.
 
 handle_call(get_word_id, _From, {WordId, _BucketId}) ->
-	lager:debug("Word id returned: ~p", [WordId]),
 	{reply, {ok, WordId}, {WordId + 1, _BucketId}};
 
 handle_call(get_bucket_id, _From, {_WordId, BucketId}) ->
-	lager:debug("Bucket id returned: ~p", [BucketId]),
 	{reply, {ok, BucketId}, {_WordId, BucketId + 1}};
 
 handle_call(_Request, _From, State) ->

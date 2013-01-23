@@ -38,8 +38,7 @@ save_indicies_internal(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList) ->
 	DbIndexDocList = convert_incomplete_cache_docs_to_db_index_docs(IncompleteCacheDocList, []),
 	DbBucketDoc = {'_id', BucketId, word_cnt, WordCnt, url_cnt, UrlCnt, indicies, DbIndexDocList},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
-	db_helper:perform_action({insert, DbBucketDoc}, ConnCfg),
-	lager:debug("Db bucket doc saved: ~p", [DbBucketDoc]).
+	db_helper:perform_action({insert, DbBucketDoc}, ConnCfg).
 
 
 get_index_internal(BucketId, WordId) ->
@@ -50,16 +49,13 @@ get_index_internal(BucketId, WordId) ->
 		{ok, {{indicies, DbIndexDocList}}} ->
 			case lists:keyfind(WordId, 2, DbIndexDocList) of
 				false -> 
-					lager:debug("No word id: ~p in bucket id: ~p.", [WordId, BucketId]),
 					{ok, no_word};
 				DbIndexDoc ->
 					IncompleteCacheDoc = convert_db_doc_to_incomplete_cache_doc(DbIndexDoc),
-					lager:debug("Incomplete cache doc returned: ~p", [IncompleteCacheDoc]),
 					{ok, IncompleteCacheDoc}
 			end;
 
 		{ok, {}} ->
-			lager:debug("No bucket id: ~p", [BucketId]),
 			{ok, no_bucket}
 	end.
 	
@@ -70,11 +66,9 @@ get_url_cnt_internal(BucketId) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
 		{ok, {{url_cnt, UrlIdCnt}}} ->
-			lager:debug("Url cnt: ~p returned for bucket id: ~p", [UrlIdCnt, BucketId]),
 			{ok, UrlIdCnt};
 
 		{ok, {}} ->
-			lager:debug("No bucket id: ~p", [BucketId]),
 			{ok, no_bucket}
 	end.
 
@@ -87,24 +81,20 @@ delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
 	%% contained on the WordIdList. 
 	IndiciesModifierDoc = { bson:utf8("$pull"), {indicies, {word_id, { bson:utf8("$in"), WordIdList}}}},
 	db_helper:perform_spawned_action({modify, SelectorDoc, IndiciesModifierDoc}, ConnCfg),
-	lager:debug("From bucket id: ~w db index docs deleted: ~w", [BucketId, WordIdList]),
 	
 	%% Update words' ids counter.
 	WordCntModifierDoc = { bson:utf8("$inc"), {word_cnt, WordCntDiff} },
 	db_helper:perform_action({modify, SelectorDoc, WordCntModifierDoc}, ConnCfg),
-	lager:debug("Bucket id: ~w updated with new word diff: ~p", [BucketId, WordCntDiff]),
 
 	%% Update urls' ids counter.
 	UrlCntModifierDoc = { bson:utf8("$set"), {url_cnt, NewUrlCnt} },
-	db_helper:perform_action({modify, SelectorDoc, UrlCntModifierDoc}, ConnCfg),
-	lager:debug("Bucket id: ~w updated with new url cnt: ~p", [BucketId, NewUrlCnt]).
+	db_helper:perform_action({modify, SelectorDoc, UrlCntModifierDoc}, ConnCfg).
 
 
 delete_bucket_internal(BucketId) ->
 	SelectorDoc = {'_id', BucketId},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
-	db_helper:perform_spawned_action({delete, SelectorDoc}, ConnCfg),
-	lager:debug("Bucket id: ~p deleted from db.", [BucketId]).
+	db_helper:perform_spawned_action({delete, SelectorDoc}, ConnCfg).
 
 %%
 %% Data handling herlper functions.
