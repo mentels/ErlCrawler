@@ -10,7 +10,7 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 100}
+  		{channels_cnt, 1000}
   	]},
   	{persistence_cfg, [
   		{max_cache_doc_size, 3000},
