@@ -25,13 +25,11 @@ get_index(Word) ->
 
 get_count(words_coll) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
-	{ok, Cnt} = db_helper:perform_action({count, {}}, ConnCfg),
-	Cnt;
+	db_helper:perform_action({count, {}}, ConnCfg),
 
 get_count(index_coll) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
-	{ok, Cnt} = db_helper:perform_action({count, {}}, ConnCfg),
-	Cnt;
+	db_helper:perform_action({count, {}}, ConnCfg),
 
 get_count(indexes) ->
 	ProjectionDoc = {'_id', 0, url_cnt, 1},
@@ -39,13 +37,14 @@ get_count(indexes) ->
 	{ok, Cursor} = db_helper:perform_action({find, {}, ProjectionDoc}, ConnCfg),
 	case mongo:rest(Cursor) of
 		[] ->
-			empty;
+			{ok, 0};
 		
 		UrlCntList ->
-			lists:foldl(fun(X, Sum) ->
+			Sum =lists:foldl(fun(X, Sum) ->
 								{url_cnt, Cnt} = X,
 								Sum + Cnt
-						end, 0, UrlCntList)
+						end, 0, UrlCntList),
+			{ok, Sum}
 	end.
 
 %% ------------------------------------------------------------------
