@@ -14,7 +14,7 @@
   	]},
   	{persistence_cfg, [
   		{max_cache_doc_size, 3000},
-  		{retry_delay, 5000}
+  		{retry_delay, 10000}
   	]},
   	{conn_manager_cfg, [
   		{pool_size, 500},

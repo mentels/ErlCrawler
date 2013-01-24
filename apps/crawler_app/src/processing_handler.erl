@@ -7,7 +7,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([process_data/3,save_url/2, tokenize/1]).
+-export([process_data/3,save_url/3, tokenize/1]).
 
 
 process_data(Url_id, Url, Source)->
@@ -15,23 +15,35 @@ process_data(Url_id, Url, Source)->
 		HTMLTree = mochiweb_html:parse(Source),
 		Words = handle_words(HTMLTree),
 		lager:log(notice,self(),string:concat(string:concat(Url, " "),erlang:integer_to_list(erlang:length(Words)))),
-		save_url(Words, Url_id)
+		FilterEtsName = list_to_atom(pid_to_list(self())),
+		FilterEtsId = ets:new(FilterEtsName, [set, {keypos, 1}, private, named_table]),
+		save_url(Words, Url_id, FilterEtsId)
 	catch
 		_:_ -> []
 	end.
 	
-save_url([],_)->
+save_url([],_, _)->
 	ok;
-save_url([H|T],Url_id) when length(H) > 1->
+save_url([H|T],Url_id, FilterEtsId) when length(H) > 1->
 	%% Jesli slowa nie ma na stopliscie a jest w slowniku, to zapisujemy
 	Word = string:to_lower(string:strip(H, both)),
 	case stoplist_server:check_word(Word) of
-		true ->crawler_persistence:add_index(Word,Url_id);
-		_ -> ok
+		true ->
+			case ets:insert_new(FilterEtsId, {Word}) of
+				true ->
+					%% slowa nie bylo na liscie filtrujacej - wpuszczamy do przetwarzania
+					crawler_persistence:add_index(Word,Url_id);
+				false ->
+					%% slowo bylo na liscie filtrujacej, nie robimy nic
+					ok
+			end;
+		
+		_ -> 
+			ok
 	end,
-	save_url(T,Url_id);
-save_url([H|T],Url_id) ->
-	save_url(T,Url_id).
+	save_url(T,Url_id, FilterEtsId);
+save_url([_H|T],Url_id, FilterEtsId) ->
+	save_url(T,Url_id, FilterEtsId).
 
 %% Wyciaga slowa i zleca ich zapisanie do bazy
 handle_words(HTMLTree) ->
