@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, get_connection_cfg/1]).
+-export([start_link/1, get_connection_cfg/2]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -19,14 +19,14 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(ConnManagerCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, ConnManagerCfg, []).
+start_link([ServerName, ConnManagerCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, ConnManagerCfg, []).
 
 
-get_connection_cfg(CollectionId) when CollectionId == words ->
-	gen_server:call(?SERVER, {get_conn_cfg_for_words_coll});
+get_connection_cfg(ServerName, CollectionId) when CollectionId == words ->
+	gen_server:call(ServerName, {get_conn_cfg_for_words_coll});
 
-get_connection_cfg(CollectionId) when CollectionId == index ->
+get_connection_cfg(ServerName, CollectionId) when CollectionId == index ->
 	gen_server:call(?SERVER, {get_conn_cfg_for_index_coll}).
 
 %% ------------------------------------------------------------------

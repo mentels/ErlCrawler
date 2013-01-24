@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, get_word_id/0, get_bucket_id/0]).
+-export([start_link/1, get_word_id/1, get_bucket_id/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -19,8 +19,8 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link(IdCfg) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, IdCfg, []).
+start_link([ServerName, ChannelsCfg, IdCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [ChannelsCfg, IdCfg], []).
 
 get_word_id() ->
 	gen_server:call(?SERVER, get_word_id).
@@ -32,21 +32,22 @@ get_bucket_id() ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(IdCfg) ->
+init([ChannelsCfg, IdCfg]) ->
 	[   
 	 	{init_word_id, WordId},
 		{init_bucket_id, BucketId}
 	] = IdCfg,
+	{{channel_id, ChannelId}, {channels_cnt, ChannelsCnt}} = ChannelsCfg,
 	%% The state always holds the ids that will be returned in the next calls to 
 	%% either get_word_id/0 or get_bucket_id/0.
-	State = {WordId, BucketId},
+	State = {WordId + ChannelId, BucketId + ChannelId, ChannelsCnt},
     {ok, State}.
 
-handle_call(get_word_id, _From, {WordId, _BucketId}) ->
-	{reply, {ok, WordId}, {WordId + 1, _BucketId}};
+handle_call(get_word_id, _From, {WordId, _BucketId, ChannelsCnt}) ->
+	{reply, {ok, WordId}, {WordId + ChannelsCnt, _BucketId, ChannelsCnt}};
 
-handle_call(get_bucket_id, _From, {_WordId, BucketId}) ->
-	{reply, {ok, BucketId}, {_WordId, BucketId + 1}};
+handle_call(get_bucket_id, _From, {_WordId, BucketId, ChannelsCnt}) ->
+	{reply, {ok, BucketId}, {_WordId, BucketId + ChannelsCnt, ChannelsCnt}};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

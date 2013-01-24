@@ -20,8 +20,8 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link([ServerName, DbCleanerCfg]) ->
-    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, DbCleanerCfg], []).
+start_link([ServerName, ConnManagerServerName, DbCleanerCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, ConnManagerServerName, DbCleanerCfg], []).
 
 
 add_index_to_delete(ServerName, BucketId, UrlIdListSize, WordId) ->
@@ -40,7 +40,7 @@ get_state(ServerName) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([ServerName, DbCleanerCfg]) ->
+init([ServerName, ConnManagerServerName, DbCleanerCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg] = DbCleanerCfg,
     
@@ -48,7 +48,8 @@ init([ServerName, DbCleanerCfg]) ->
 	%% size refers to summary sizes of WordIdList of each entry; it is the sum of WordIdListSize of each entry
 	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cache"),
 	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
-	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg},
+	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg, MaxUnusedUrlIdCntPercentageCfg, 
+			 {conn_manager_server_name, ConnManagerServerName}},
     {ok, State}.
 
 
@@ -126,7 +127,7 @@ get_cache_entry(BucketId, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
 	case ets:lookup(CacheTabId, BucketId) of
 		[] ->
-			{ok, UrlIdCnt} = indexdb_functions:get_url_cnt(BucketId),
+			{ok, UrlIdCnt} = indexdb_functions:get_url_cnt(BucketId, get_state_value(conn_manager_server_name, State)),
 			CacheEntry = create_cache_entry(BucketId, UrlIdCnt),
 			ets:insert(CacheTabId, CacheEntry),
 			CacheEntry;
@@ -166,7 +167,8 @@ update_state({update_entry, BucketId, NewUnusedUrlIdCnt, NewWordIdList, NewWordI
 
 update_state({clean_cache}, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
-	clean_cache(ets:match_object(CacheTabId, '$1')),
+	ConnManagerServerName = get_state_value(conn_manager_server_name, State)
+	clean_cache(ets:match_object(CacheTabId, '$1'), ConnManagerServerName),
 	ets:delete_all_objects(CacheTabId),
 	update_state_value({size, 0}, State).
 	
@@ -174,21 +176,21 @@ update_state({clean_cache}, State) ->
 %%	
 %% Cleaning helper functions.	
 %%	
-clean_indicies(BucketId, bucket_empty) ->
-	indexdb_functions:delete_bucket(BucketId);
+clean_indicies(BucketId, bucket_empty, ConnManagerServerName) ->
+	indexdb_functions:delete_bucket(BucketId, ConnManagerServerName);
 
-clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}) ->
+clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}, ConnManagerServerName) ->
 	WordCntDiff = - WordIdListSize,
-	indexdb_functions:delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlIdCnt).
+	indexdb_functions:delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlIdCnt, ConnManagerServerName).
 	
 	
-clean_cache([]) ->
+clean_cache([], _) ->
 	ok;
 
-clean_cache([ {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize} | T ]) ->
+clean_cache([ {BucketId, UrlIdCnt, UnusedUrlIdCnt, WordIdList, WordIdListSize} | T ], ConnManagerServerName) ->
 	NewUrlIdCnt = UrlIdCnt - UnusedUrlIdCnt,
-	clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}),
-	clean_cache(T).
+	clean_indicies(BucketId, {WordIdList, WordIdListSize, NewUrlIdCnt}, ConnManagerServerName),
+	clean_cache(T, ConnManagerServerName).
 
 
 %%
@@ -223,21 +225,24 @@ is_cache_full(State) ->
 %%
 %% State handling helper functions.
 %%
-get_state_value(cache_tab_id_and_size, {{cache_tab_id, CacheTabId}, {size, Size}, _, _}) ->
+get_state_value(cache_tab_id_and_size, {{cache_tab_id, CacheTabId}, {size, Size}, _, _, _}) ->
 	{CacheTabId, Size};
 
-get_state_value(cache_tab_id, {{cache_tab_id, CacheTabId}, _, _, _}) ->
+get_state_value(cache_tab_id, {{cache_tab_id, CacheTabId}, _, _, _, _}) ->
 	CacheTabId;
 
-get_state_value(size, {_, {size, Size}, _, _}) ->
+get_state_value(size, {_, {size, Size}, _, _, _}) ->
 	Size;
 
-get_state_value(max_size, {_, _, {max_word_id_cnt, Value}, _}) ->
+get_state_value(max_size, {_, _, {max_word_id_cnt, Value}, _, _}) ->
 	Value;
 
-get_state_value(unused_url_id_ratio, {_, _, _, {max_unused_url_id_cnt_percentage, Value}}) ->
+get_state_value(unused_url_id_ratio, {_, _, _, {max_unused_url_id_cnt_percentage, Value}, _}) ->
+	Value;
+
+get_state_value(conn_manager_server_name, {_, _, _, _, {conn_manager_server_name, Value}}) ->
 	Value.
 
 
-update_state_value({size, NewSize}, {CacheCfg, _, Cfg1, Cfg2}) ->
-	{CacheCfg, {size, NewSize}, Cfg1, Cfg2}.
+update_state_value({size, NewSize}, {CacheCfg, _, Cfg1, Cfg2, Cfg3}) ->
+	{CacheCfg, {size, NewSize}, Cfg1, Cfg2, Cfg3}.

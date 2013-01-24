@@ -10,41 +10,41 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-save_indicies(BucketId, WordCnt, UrlCnt, IncompleCacheDocList) ->
-	save_indicies_internal(BucketId, WordCnt, UrlCnt, IncompleCacheDocList).
+save_indicies(BucketId, WordCnt, UrlCnt, IncompleCacheDocList, ConnManagerServerName) ->
+	save_indicies_internal(BucketId, WordCnt, UrlCnt, IncompleCacheDocList, ConnManagerServerName).
 
 
-get_index(BucketId, WordId) ->
-	get_index_internal(BucketId, WordId).
+get_index(BucketId, WordId, ConnManagerServerName) ->
+	get_index_internal(BucketId, WordId, ConnManagerServerName).
 
 
-get_url_cnt(BucketId) ->
-	get_url_cnt_internal(BucketId).
+get_url_cnt(BucketId, ConnManagerServerName) ->
+	get_url_cnt_internal(BucketId, ConnManagerServerName).
 
 
-delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
-	delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt).
+delete_indicies(BucketId, WordIdList, WordCntDiff, NewUrlCnt, ConnManagerServerName) ->
+	delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt, ConnManagerServerName).
 
 
-delete_bucket(BucketId) ->
-	delete_bucket_internal(BucketId).
+delete_bucket(BucketId, ConnManagerServerName) ->
+	delete_bucket_internal(BucketId, ConnManagerServerName).
 
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-save_indicies_internal(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList) ->
+save_indicies_internal(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, ConnManagerServerName) ->
 	DbIndexDocList = convert_incomplete_cache_docs_to_db_index_docs(IncompleteCacheDocList, []),
 	DbBucketDoc = {'_id', BucketId, word_cnt, WordCnt, url_cnt, UrlCnt, indicies, DbIndexDocList},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(ConnManagerServerName, index),
 	db_helper:perform_action({insert, DbBucketDoc}, ConnCfg).
 
 
-get_index_internal(BucketId, WordId) ->
+get_index_internal(BucketId, WordId, ConnManagerServerName) ->
 	SelectorDoc = {'_id', BucketId}, 
 	ProjectionDoc = {indicies, 1, '_id', 0},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(ConnManagerServerName, index),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
 		{ok, {{indicies, DbIndexDocList}}} ->
 			case lists:keyfind(WordId, 2, DbIndexDocList) of
@@ -60,10 +60,10 @@ get_index_internal(BucketId, WordId) ->
 	end.
 	
 
-get_url_cnt_internal(BucketId) ->
+get_url_cnt_internal(BucketId, ConnManagerServerName) ->
 	SelectorDoc = {'_id', BucketId}, 
 	ProjectionDoc = {url_cnt, 1, '_id', 0},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(ConnManagerServerName, index),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
 		{ok, {{url_cnt, UrlIdCnt}}} ->
 			{ok, UrlIdCnt};
@@ -73,9 +73,9 @@ get_url_cnt_internal(BucketId) ->
 	end.
 
 	
-delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
+delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt, ConnManagerServerName) ->
 	SelectorDoc = {'_id', BucketId},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(ConnManagerServerName, index),
 	
 	%% Delete from given bucket those entries that are related to word's ids 
 	%% contained on the WordIdList. 
@@ -91,9 +91,9 @@ delete_indicies_internal(BucketId, WordIdList, WordCntDiff, NewUrlCnt) ->
 	db_helper:perform_action({modify, SelectorDoc, UrlCntModifierDoc}, ConnCfg).
 
 
-delete_bucket_internal(BucketId) ->
+delete_bucket_internal(BucketId, ConnManagerServerName) ->
 	SelectorDoc = {'_id', BucketId},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(ConnManagerServerName, index),
 	db_helper:perform_spawned_action({delete, SelectorDoc}, ConnCfg).
 
 %%
