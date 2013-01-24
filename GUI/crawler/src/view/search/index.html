@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block menu %}
+	<a class="current" href="/">Strona główna</a>|
+	<a href="/config/stats">Statystyki</a>|
+	<a href="/config/configs">Konfiguracja</a>
+{% endblock %}
+
+
+{% block content %}
+
+<form action="/search/results" method="post">
+    <input name="word" type="text" maxlength="100" />
+    <input type="submit" value="Submit" />
+</form>
+
+{% endblock %}
+
