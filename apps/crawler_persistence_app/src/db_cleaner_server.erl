@@ -68,14 +68,15 @@ handle_cast({add_index_to_delete, BucketId, UrlIdListSize, WordId}, State) ->
 	WordIdListSize = get_cache_entry_value(word_id_list_size, CacheEntry),
 	case is_bucket_ready_to_clean(CacheEntry, UrlIdListSize, State) of
 		true ->
+			ConnManagerServerName = get_state_value(conn_manager_server_name, State),
 			case calculate_url_id_cnt(CacheEntry, UrlIdListSize) of
 				0 -> 
-					clean_indicies(BucketId, bucket_empty),
+					clean_indicies(BucketId, bucket_empty, ConnManagerServerName),
 					{noreply, update_state({delete_entry, BucketId, WordIdListSize}, State)};
 
 				NewUrlIdCnt ->
 					WordIdList = [WordId | get_cache_entry_value(word_id_list, CacheEntry) ],
-					clean_indicies(BucketId, {WordIdList, WordIdListSize + 1, NewUrlIdCnt}),
+					clean_indicies(BucketId, {WordIdList, WordIdListSize + 1, NewUrlIdCnt}, ConnManagerServerName),
 					{noreply, update_state({reset_entry, BucketId, WordIdListSize, NewUrlIdCnt}, State)}
 			end;
 		
@@ -167,7 +168,7 @@ update_state({update_entry, BucketId, NewUnusedUrlIdCnt, NewWordIdList, NewWordI
 
 update_state({clean_cache}, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
-	ConnManagerServerName = get_state_value(conn_manager_server_name, State)
+	ConnManagerServerName = get_state_value(conn_manager_server_name, State),
 	clean_cache(ets:match_object(CacheTabId, '$1'), ConnManagerServerName),
 	ets:delete_all_objects(CacheTabId),
 	update_state_value({size, 0}, State).

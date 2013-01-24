@@ -4,7 +4,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([save_indicies/4, get_index/2, get_url_cnt/1, delete_indicies/4, delete_bucket/1]).
+-export([save_indicies/5, get_index/3, get_url_cnt/2, delete_indicies/5, delete_bucket/2]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions

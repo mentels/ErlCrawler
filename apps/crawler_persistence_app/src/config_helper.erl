@@ -94,12 +94,12 @@ get_max_word_id_and_bucket_id() ->
 		  
 		  
 get_max_word_id() ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	get_max_id_from_db(ConnCfg).
 
 
 get_max_bucket_id() ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	get_max_id_from_db(ConnCfg).
 	
 
@@ -132,6 +132,6 @@ get_id_ordering_fun() ->
 %% Indexes creating helper functions.
 %%
 create_index_on_words_coll() ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	IndexSpec = {key, {word, 1}, unique, true},
 	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).

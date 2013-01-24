@@ -27,7 +27,7 @@ get_connection_cfg(ServerName, CollectionId) when CollectionId == words ->
 	gen_server:call(ServerName, {get_conn_cfg_for_words_coll});
 
 get_connection_cfg(ServerName, CollectionId) when CollectionId == index ->
-	gen_server:call(?SERVER, {get_conn_cfg_for_index_coll}).
+	gen_server:call(ServerName, {get_conn_cfg_for_index_coll}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions

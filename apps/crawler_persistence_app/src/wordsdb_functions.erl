@@ -4,7 +4,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([save_word/1, get_word_data/1, update_active_bucket_id/2, freeze_bucket_id/2]).
+-export([save_word/2, get_word_data/2, update_active_bucket_id/3, freeze_bucket_id/3]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions

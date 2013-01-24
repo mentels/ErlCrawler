@@ -29,16 +29,17 @@ init(_StartArgs) ->
 	
 	%% Set connectin manager.
 	ConnectionManagerCfg = config_helper:get_server_config(conn_manager_server),
-	ConnManagerServerSpec = ?CHILD(conn_manager_server, worker, ConnectionManagerCfg, infinity),
+	ConnManagerServerSpec = ?CHILD_CHANNEL(conn_manager_server_master, conn_manager_server, 
+										   worker, ConnectionManagerCfg, infinity),
 	
 	%% Set id and dispatch servers.
 	IdAndDispatchServersSup = ?CHILD(id_and_dispatch_servers_sup, supervisor, [], infinity),
 	
 	%% Set channels supervisors.
 	[{channels_cnt, ChannelCnt}] = config_helper:get_channels_config(),
-	ChannelSupSpecs = get_channel_supervisor_specs(ChannelCnt, []),
+	ChannelPrimarySupSpecs = get_channel_supervisor_specs(ChannelCnt, []),
 	
-    ChildrenSpecs = [ ConnManagerServerSpec, IdAndDispatchServersSup | ChannelSupSpecs],
+    ChildrenSpecs = [ ConnManagerServerSpec, IdAndDispatchServersSup | ChannelPrimarySupSpecs],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 
@@ -46,9 +47,10 @@ init(_StartArgs) ->
 
 
 get_channel_supervisor_specs(ChannelsCnt, ChannelSupSpecs) when ChannelsCnt > 0 ->
-	ChannelSupName = config_helper:get_worker_name(channel_sup, ChannelsCnt),
+	ChannelSupName = config_helper:get_worker_name(channel_primary_sup, ChannelsCnt),
 	ChannelId = ChannelsCnt,
-	ChannelSupSpec = ?CHILD_CHANNEL(ChannelSupName, channel_sup, supervisor, [ChannelSupName, ChannelId], infinity),
+	ChannelSupSpec = ?CHILD_CHANNEL(ChannelSupName, channel_primary_sup, supervisor, 
+									[ChannelSupName, ChannelId], infinity),
 	get_channel_supervisor_specs(ChannelsCnt - 1, [ChannelSupSpec | ChannelSupSpecs]);
 
 get_channel_supervisor_specs(ChannelsCnt, ChannelSupSpecs) when ChannelsCnt == 0 ->
