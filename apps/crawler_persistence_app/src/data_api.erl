@@ -25,11 +25,11 @@ get_index(Word) ->
 
 get_count(words_coll) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
-	db_helper:perform_action({count, {}}, ConnCfg),
+	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(index_coll) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
-	db_helper:perform_action({count, {}}, ConnCfg),
+	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(indexes) ->
 	ProjectionDoc = {'_id', 0, url_cnt, 1},
