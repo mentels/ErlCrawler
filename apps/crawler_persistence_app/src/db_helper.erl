@@ -52,6 +52,10 @@ perform_db_action({modify, SelectorDoc, ModifierDoc}, {CollName, DbName, Conn}) 
 
 perform_db_action({create_index, IndexSpec}, {CollName, DbName, Conn}) ->
 	Action = fun() -> mongo:create_index(CollName, IndexSpec) end,
+	perform_mongo_action(Action, DbName, Conn);
+
+perform_db_action({count, SelectorDoc}, {CollName, DbName, Conn}) ->
+	Action = fun() -> mongo:count(CollName, SelectorDoc) end,
 	perform_mongo_action(Action, DbName, Conn).
 
 
