@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, get_word_id/0, get_bucket_id/0]).
+-export([start_link/1, get_word_id/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -25,29 +25,22 @@ start_link(IdCfg) ->
 get_word_id() ->
 	gen_server:call(?SERVER, get_word_id).
 
-get_bucket_id() ->
-	gen_server:call(?SERVER, get_bucket_id).
-
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
 init(IdCfg) ->
 	[   
-	 	{init_word_id, WordId},
-		{init_bucket_id, BucketId}
+	 	{init_word_id, WordId}
 	] = IdCfg,
 
 	%% The state always holds the ids that will be returned in the next calls to 
 	%% either get_word_id/0 or get_bucket_id/0.
-	State = {WordId, BucketId},
+	State = WordId,
     {ok, State}.
 
-handle_call(get_word_id, _From, {WordId, _BucketId}) ->
-	{reply, {ok, WordId}, {WordId + 1, _BucketId}};
-
-handle_call(get_bucket_id, _From, {_WordId, BucketId}) ->
-	{reply, {ok, BucketId}, {_WordId, BucketId + 1}};
+handle_call(get_word_id, _From, WordId) ->
+	{reply, {ok, WordId}, WordId + 1};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

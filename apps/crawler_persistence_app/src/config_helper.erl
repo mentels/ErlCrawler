@@ -36,28 +36,15 @@ get_server_config_internal(persistence_server) ->
 
 get_server_config_internal(id_server) ->
 	{ok, IdCfg}  = application:get_env(id_cfg),
-	case get_max_word_id_and_bucket_id() of
-		{no_id, no_id} ->
+	case get_max_word_id() of
+		no_id ->
 			IdCfg;
 		
-		{WordId, no_id} ->
-			lists:keyreplace(init_word_id, 1, IdCfg, {init_word_id, WordId + 1});
+		WordId ->
+			lists:keyreplace(init_word_id, 1, IdCfg, {init_word_id, WordId + 1})
 		
-		{no_id, BucketId} ->
-			lists:keyreplace(init_bucket_id, 1, IdCfg, {init_bucket_id, BucketId + 1});
-		
-		{WordId, BucketId} ->
-			[{init_word_id, WordId + 1}, {init_bucket_id, BucketId + 1}]
-	
 	end;
 
-get_server_config_internal(db_cleaner_server) ->
-	{ok, DbCleanerCfg} = application:get_env(db_cleaner_cfg),
-	DbCleanerCfg;
-
-get_server_config_internal(index_cache_server) ->
-	{ok, CacheServerCfg} = application:get_env(index_cache_cfg),
-	CacheServerCfg;
 
 get_server_config_internal(conn_manager_server) ->
 	{ok, ConnManagerCfg} = application:get_env(conn_manager_cfg),
@@ -79,7 +66,8 @@ get_channels_config_internal() ->
 set_indexes_internal() ->
 	case get_max_word_id() of
 		no_id ->
-			create_index_on_words_coll();
+			create_index_on_words_coll(),
+			create_index_on_index_coll();	
 		
 		_ ->
 			ok
@@ -88,22 +76,9 @@ set_indexes_internal() ->
 %%
 %% Max id retrieving helper functions.
 %%
-
-get_max_word_id_and_bucket_id() ->
-	{get_max_word_id(), get_max_bucket_id()}.
-		  
-		  
+		  	  
 get_max_word_id() ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
-	get_max_id_from_db(ConnCfg).
-
-
-get_max_bucket_id() ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
-	get_max_id_from_db(ConnCfg).
-	
-
-get_max_id_from_db(ConnCfg) ->
 	SelectorDoc = {},
 	ProjectionDoc = {'_id', 1},
 	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, ConnCfg),
@@ -134,4 +109,9 @@ get_id_ordering_fun() ->
 create_index_on_words_coll() ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	IndexSpec = {key, {word, 1}, unique, true},
+	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).
+
+create_index_on_index_coll() ->
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
+	IndexSpec = {key, {'_id', 1, urls, 1}, unique, true},
 	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).

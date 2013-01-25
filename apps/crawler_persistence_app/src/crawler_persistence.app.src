@@ -12,28 +12,16 @@
   	{channels_cfg, [
   		{channels_cnt, 100}
   	]},
-  	{persistence_cfg, [
-  		{max_cache_doc_size, 3000},
-  		{retry_delay, 10000}
-  	]},
   	{conn_manager_cfg, [
-  		{pool_size, 500},
+  		{pool_size, 10},
   		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
   		{index_coll, 'Index'}
   	]},
   	{id_cfg, [   
-		{init_word_id, 1000},
-		{init_bucket_id, 0}
+		{init_word_id, 1000}
 	]},				
- 	{db_cleaner_cfg, [
- 		{max_word_id_cnt, 6000},
-        {max_unused_url_id_cnt_percentage, 50}			
- 	]},
- 	{index_cache_cfg, [
-        {max_cache_size, 6000}  					
- 	]},
  	{words_cache_cfg, [
         {max_cache_size, 3000}  					
  	]}

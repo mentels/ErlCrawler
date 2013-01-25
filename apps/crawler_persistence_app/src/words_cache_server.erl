@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_word_cache_doc/2, flush_and_add_word_cache_doc/2, get_word_data/2, flush/1]).
+-export([start_link/1, add_word_cache_doc/2, flush_and_add_word_cache_doc/2, get_word_id/2, flush/1]).
 -export([get_state/1]).
 
 %% ------------------------------------------------------------------
@@ -32,8 +32,8 @@ flush_and_add_word_cache_doc(ServerName, CacheWordDoc) ->
 	gen_server:cast(ServerName, {flush_and_add_word_cache_doc, CacheWordDoc}).
 
 
-get_word_data(ServerName, Word) ->
-	gen_server:call(ServerName, {get_word_data, Word}).
+get_word_id(ServerName, Word) ->
+	gen_server:call(ServerName, {get_word_id, Word}).
 
 
 flush(ServerName) ->
@@ -66,12 +66,12 @@ handle_call({add_word_cache_doc, CacheWordDoc}, _From, State) ->
 			{reply, {ok, full}, State}
 	end;
 
-handle_call({get_word_data, Word}, _From, State) ->
-	case get_word_data_internal(Word, State) of
+handle_call({get_word_id, Word}, _From, State) ->
+	case get_word_id_internal(Word, State) of
 		{} -> 	
 			{reply, {ok, word_not_found}, State};
-		WordData ->	
-			{reply, {ok, WordData}, State}
+		WordId ->	
+			{reply, {ok, WordId}, State}
 	end;
 
 handle_call(get_state, _From, State) ->
@@ -113,15 +113,14 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 
-get_word_data_internal(Word, State) ->
+get_word_id_internal(Word, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
-	case ets:match(CacheTabId, {Word, '$0', '$1'}) of
+	case ets:match(CacheTabId, {Word, '$0'}) of
 		[] ->
 			{};
 
-		[[WordId, ActiveBucketId]] ->
-			WordData = {WordId, ActiveBucketId},
-			WordData
+		[[WordId]] ->
+			WordId
 
 	end.
 

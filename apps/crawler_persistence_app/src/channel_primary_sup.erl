@@ -30,13 +30,14 @@ init(ChannelId) ->
 	%% Set connectin manager.
 	ConnManagerCfg = config_helper:get_server_config(conn_manager_server),
 	ConnManagerName = config_helper:get_worker_name(conn_manager_server, ChannelId),
-	ConnManagerServerSpec = ?CHILD_CHANNEL(ConnManagerName, conn_manager_server, worker, ConnManagerCfg, infinity),
+	ConnManagerServerSpec = ?CHILD_CHANNEL(ConnManagerName, conn_manager_server, worker, 
+										   [ConnManagerName, ConnManagerCfg], infinity),
 
 	
 	%% Set secondary channel supervisor
 	ChannelSecondarySupName = config_helper:get_worker_name(channel_secondary_sup, ChannelId),
 	ChannelSecondarySupSpec = ?CHILD_CHANNEL(ChannelSecondarySupName, channel_secondary_sup, supervisor, 
-										 [ChannelSecondarySupName, ChannelId, ConnManagerName], inifinity),
+										 [ChannelSecondarySupName, ChannelId, ConnManagerName], infinity),
 	
 	
     {ok, { { one_for_one , 0, 1}, [ConnManagerServerSpec, ChannelSecondarySupSpec] } }. 
