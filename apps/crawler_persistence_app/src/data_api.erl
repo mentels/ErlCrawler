@@ -59,7 +59,7 @@ get_word_id(Word) ->
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
 		{ok, {{'_id', WordId}}} ->
-			no_bucket;
+			WordId;
 		
 		{ok, {}} ->
 			no_word
