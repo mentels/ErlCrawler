@@ -24,16 +24,16 @@ get_index(Word) ->
 
 
 get_count(words_coll) ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(index_coll) ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(indexes) ->
 	ProjectionDoc = {'_id', 0, url_cnt, 1},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	{ok, Cursor} = db_helper:perform_action({find, {}, ProjectionDoc}, ConnCfg),
 	case mongo:rest(Cursor) of
 		[] ->
@@ -59,7 +59,7 @@ get_count(indexes) ->
 get_word_id_and_bucket_id_list(Word) ->
 	SelectorDoc = {word, bson:utf8(Word)},
 	ProjectionDoc = {'_id', 1, active_bucket_id, 1, frozen_bucket_id, 1},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(words),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
 		{ok, {{'_id', _, active_bucket_id, <<"unspec">>, frozen_bucket_id, []}}} ->
 			no_bucket;
@@ -83,7 +83,7 @@ get_word_id_and_bucket_id_list(Word) ->
 get_url_id_list(BucketIdList, WordId) ->
 	SelectorDoc = {'_id', { bson:utf8("$in"), BucketIdList}}, 
 	ProjectionDoc = {indicies, 1, '_id', 0},
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(index),
+	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, ConnCfg),
 	retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, mongo:rest(Cursor), []).
 		

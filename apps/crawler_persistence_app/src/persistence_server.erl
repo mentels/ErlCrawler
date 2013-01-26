@@ -43,15 +43,20 @@ prepare_to_stop(ServerName) ->
 init([HelperServersCfg, PersistenceCfg]) ->
 	process_flag(trap_exit, true),
 	[MaxCacheDocSizeCfg, RetryCfg] = PersistenceCfg, 
-	{WordsCacheCfg, IndexCacheCfg, CleanerCacheCfg, NotificationCfg} = HelperServersCfg,
-	State = {MaxCacheDocSizeCfg, RetryCfg, WordsCacheCfg, IndexCacheCfg, CleanerCacheCfg, NotificationCfg},
+	
+	{WordsCacheCfg, IndexCacheCfg, CleanerCacheCfg, NotificationCfg, 
+	 	ConnManagerServerCfg} = HelperServersCfg,
+	
+	State = {MaxCacheDocSizeCfg, RetryCfg, WordsCacheCfg, IndexCacheCfg, CleanerCacheCfg, 
+			 NotificationCfg, ConnManagerServerCfg},
+	
     {ok, State}.
 
 
 handle_call(prepare_to_stop, _From, State) ->
 	lager:debug("Serving request: prepare_to_stop."),
 	save_index_cache_to_db(State),
-	db_cleaner_server:flush_cache(get_index_cache_server_name(index, State)),
+	db_cleaner_server:flush_cache(get_server_name(index, State)),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -59,13 +64,13 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({add_index, Word, UrlId}, State) ->
-	lager:info("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
+	lager:debug("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
 				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(first_try, Word, UrlId, State),
 	{noreply, State};
 
 handle_cast({retry_add_index, Word, UrlId}, State) ->
-	lager:info("Serving request: {retry_add_index, ~p, ~p}. Mailbox queue size: ~p", 
+	lager:debug("Serving request: {retry_add_index, ~p, ~p}. Mailbox queue size: ~p", 
 				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
 	add_index(retry, Word, UrlId, State),
 	{noreply, State};
@@ -95,7 +100,7 @@ get_word_data(Word, State) ->
 	lager:debug("Obtaining data for word: ~p.", [Word]),
 	case get_word_data_from_cache(Word, State) of
 		word_not_found ->
-			case get_word_data_from_db(Word) of
+			case get_word_data_from_db(Word, State) of
 				no_word ->
 					{Word, WordId, BucketId} = create_new_cache_word_doc(Word),
 					lager:debug("Word data not found in cache nor in db. New cache word doc created: {~p, ~p, ~p}.", 
@@ -143,7 +148,7 @@ add_index(WordId, BucketId, UrlId, State) ->
 		index_not_found ->
 			case is_bucket_in_db(BucketId) of
 				true ->
-					IncompleteCacheDoc = get_index_from_db(BucketId, WordId),
+					IncompleteCacheDoc = get_index_from_db(BucketId, WordId, State),
 					UpdatedCacheDoc = update_incomplete_cache_doc(IncompleteCacheDoc, BucketId, UrlId),
 					lager:debug("Index data for word data: {~p, ~p} not found in cache but in db.", [WordId, BucketId]),
 					update_index_cache({add_index, UpdatedCacheDoc}, State);
@@ -185,22 +190,24 @@ enqueue_indicies_to_delete([{WordId, _, _, OldBucketId, InitUrlIdListSize} | T],
 %%% Word data obtaining helper functions.
 %%%
 get_word_data_from_cache(Word, State) ->
-	{ok, WordData} = words_cache_server:get_word_data(get_index_cache_server_name(words, State), Word),
+	{ok, WordData} = words_cache_server:get_word_data(get_server_name(words, State), Word),
 	WordData.
 
-get_word_data_from_db(Word) ->
-	wordsdb_functions:get_word_data(Word).
+get_word_data_from_db(Word, State) ->
+	ConnManagerServerName = get_server_name(conn_manager, State),
+	wordsdb_functions:get_word_data(Word, ConnManagerServerName).
 
 %%
 %% Index obtaining helper functions.
 %%
 get_index_data_from_cache(WordId, State) ->
-	{ok, IndexData} = index_cache_server:get_index_data(get_index_cache_server_name(index, State), WordId),
+	{ok, IndexData} = index_cache_server:get_index_data(get_server_name(index, State), WordId),
 	IndexData.
 
 
-get_index_from_db(BucketId, WordId) ->
-	case indexdb_functions:get_index(BucketId, WordId) of
+get_index_from_db(BucketId, WordId, State) ->
+	ConnManagerServerName = get_server_name(conn_manager, State),
+	case indexdb_functions:get_index(BucketId, WordId, ConnManagerServerName) of
 		{ok, no_word} ->
 			lager:error("No word id: ~p found in bucket id: ~p", [WordId, BucketId]),
 			erlang:error(no_word_in_index);
@@ -266,7 +273,7 @@ create_new_index_cache_doc(WordId, UrlId) ->
 
 
 update_index_cache({update_index_data, WordId, IndexData}, State) ->
-	case index_cache_server:update_index_data(get_index_cache_server_name(index, State), WordId, IndexData) of
+	case index_cache_server:update_index_data(get_server_name(index, State), WordId, IndexData) of
 		ok ->
 			lager:debug("Index cache updated for word id: ~p with new index data: ~w.", [WordId, IndexData]),
 			ok;
@@ -277,7 +284,7 @@ update_index_cache({update_index_data, WordId, IndexData}, State) ->
 	end;
 
 update_index_cache({add_index, CacheDoc}, State) ->
-	case index_cache_server:add_index(get_index_cache_server_name(index, State), CacheDoc) of
+	case index_cache_server:add_index(get_server_name(index, State), CacheDoc) of
 		ok ->
 			lager:debug("Index cache updated with new cache index doc: ~w.", [CacheDoc]),
 			ok;
@@ -297,7 +304,7 @@ create_new_cache_word_doc(Word) ->
 
 
 update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
-	CacheServerName = get_index_cache_server_name(words, State),
+	CacheServerName = get_server_name(words, State),
 	case words_cache_server:add_word_cache_doc(CacheServerName, CacheWordDoc) of
 		{ok, full} ->
 			words_cache_server:flush_and_add_word_cache_doc(CacheServerName, CacheWordDoc),
@@ -313,11 +320,11 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 %% 
 save_index_cache_to_db(State) ->
 	lager:debug("Cleaning index cache."),
-	{ok, CacheDocList} =  index_cache_server:retrieve_all_indicies(get_index_cache_server_name(index, State)),
+	{ok, CacheDocList} =  index_cache_server:retrieve_all_indicies(get_server_name(index, State)),
 	{ok, BucketId} = id_server:get_bucket_id(),
 	Counters = {0, 0},
 	Lists = {[], [], []},
-	spawn_enqueue_indicies_to_delete(CacheDocList, get_index_cache_server_name(cleaner, State)),
+	spawn_enqueue_indicies_to_delete(CacheDocList, get_server_name(cleaner, State)),
 	save_index_cache_to_db(CacheDocList, BucketId, Counters, Lists, State).
 
 
@@ -351,10 +358,10 @@ save_index_cache_to_db([], BucketId, Counters, Lists, State) ->
 	
 	%% Freeze bucket ids for words that had extened size and mark them as "unbucketed".
 	spawn_update_active_bucket_id(unspec, WordIdToFreezeList, State),
-	spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList),
+	spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList, State),
 	
 	%% Flush words cache and wait for new bucket operations to complete.
-	words_cache_server:flush(get_index_cache_server_name(words, State)),
+	words_cache_server:flush(get_server_name(words, State)),
 	wait_for_new_bucket_operations_to_complete(get_state_value(notification_server_name, State)).
 		
 
@@ -375,10 +382,11 @@ spawn_delayed_add_index(Word, UrlId, State) ->
 
 spawn_save_word_to_db(CacheWordDoc, State) ->
 	NotificationServerName = get_state_value(notification_server_name, State),
+	ConnManagerServerName = get_server_name(conn_manager, State),
 	notification_server:notify(NotificationServerName, save_word_about_to_be_spawned),
 	spawn(
 	  	fun() ->
-			wordsdb_functions:save_word(CacheWordDoc),
+			wordsdb_functions:save_word(CacheWordDoc, ConnManagerServerName),
 			notification_server:notify(NotificationServerName, save_word_completed)
 		end
 	  ),
@@ -387,10 +395,11 @@ spawn_save_word_to_db(CacheWordDoc, State) ->
 
 spawn_save_bucket_to_db(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, State) ->
 	NotificationServerName = get_state_value(notification_server_name, State),
+	ConnManagerServerName = get_server_name(conn_manager, State),
 	notification_server:notify(NotificationServerName, new_bucket_operation_about_to_be_spawned),
 	spawn(
 	  	fun() ->
-			indexdb_functions:save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList),
+			indexdb_functions:save_indicies(BucketId, WordCnt, UrlCnt, IncompleteCacheDocList, ConnManagerServerName),
 			notification_server:notify(NotificationServerName, new_bucket_operation_completed)
 		end
 	  ),
@@ -402,23 +411,25 @@ spawn_update_active_bucket_id(_BucketId, [], _State) ->
 
 spawn_update_active_bucket_id(BucketId, WordIdToUpdateList, State) ->
 	NotificationServerName = get_state_value(notification_server_name, State),
+	ConnManagerServerName = get_server_name(conn_manager, State),
 	notification_server:notify(NotificationServerName, new_bucket_operation_about_to_be_spawned),
 	spawn(
 	  	fun() ->
-			wordsdb_functions:update_active_bucket_id(WordIdToUpdateList, BucketId),
+			wordsdb_functions:update_active_bucket_id(WordIdToUpdateList, BucketId, ConnManagerServerName),
 			notification_server:notify(NotificationServerName, new_bucket_operation_completed)
 		end
 	  ),
 	lager:debug("Operation: update active bucket id - spawned.").
 
 
-spawn_freeze_indicies_in_bucket(_BucketId, []) ->
+spawn_freeze_indicies_in_bucket(_BucketId, [], _State) ->
 	ok;
 
-spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList) ->
+spawn_freeze_indicies_in_bucket(BucketId, WordIdToFreezeList, State) ->
+	ConnManagerServerName = get_server_name(conn_manager, State),
 	spawn(
 	  	fun() ->
-			wordsdb_functions:freeze_bucket_id(WordIdToFreezeList, BucketId)
+			wordsdb_functions:freeze_bucket_id(WordIdToFreezeList, BucketId, ConnManagerServerName)
 		end
 	  ),
 	lager:debug("Operation: freeze indicies in bucket - spawned.").
@@ -475,32 +486,38 @@ is_bucket_in_db(BucketId) ->
 %%
 %% Cache server names helper functions.
 %%
-get_index_cache_server_name(words, State) ->
+get_server_name(words, State) ->
 	get_state_value(words_cache_server_name, State);
 
-get_index_cache_server_name(index, State) ->
+get_server_name(index, State) ->
 	get_state_value(index_cache_server_name, State);
 
-get_index_cache_server_name(cleaner, State) ->
-	get_state_value(cleaner_cache_server_name, State).
+get_server_name(cleaner, State) ->
+	get_state_value(cleaner_cache_server_name, State);
+
+get_server_name(conn_manager, State) ->
+	get_state_value(conn_manager_server_name, State).
 
 %%
 %% State handling helper functions.
 %% 
-get_state_value(max_cache_doc_size, {{max_cache_doc_size, Value}, _, _, _, _, _}) ->
+get_state_value(max_cache_doc_size, {{max_cache_doc_size, Value}, _, _, _, _, _, _}) ->
 	Value;
 
-get_state_value(retry_delay, {_, {retry_delay, Value}, _, _, _, _}) ->
+get_state_value(retry_delay, {_, {retry_delay, Value}, _, _, _, _, _}) ->
 	Value;
 
-get_state_value(words_cache_server_name, {_, _, {words_cache_server_name, Value}, _, _, _}) ->
+get_state_value(words_cache_server_name, {_, _, {words_cache_server_name, Value}, _, _, _, _}) ->
 	Value;
 
-get_state_value(index_cache_server_name, {_, _, _, {index_cache_server_name, Value}, _, _}) ->
+get_state_value(index_cache_server_name, {_, _, _, {index_cache_server_name, Value}, _, _, _}) ->
 	Value;
 
-get_state_value(cleaner_cache_server_name, {_, _, _, _, {cleaner_cache_server_name, Value}, _}) ->
+get_state_value(cleaner_cache_server_name, {_, _, _, _, {cleaner_cache_server_name, Value}, _, _}) ->
 	Value;
 
-get_state_value(notification_server_name, {_, _, _, _, _, {notification_server_name, Value}}) ->
+get_state_value(notification_server_name, {_, _, _, _, _, {notification_server_name, Value}, _}) ->
+	Value;
+
+get_state_value(conn_manager_server_name, {_, _, _, _, _, _, {conn_manager_server_name, Value}}) ->
 	Value.

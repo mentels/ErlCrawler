@@ -1,4 +1,4 @@
--module(channel_sup).
+-module(channel_secondary_sup).
 
 -behaviour(supervisor).
 
@@ -26,14 +26,14 @@
 %% API functions
 %% ===================================================================
 
-start_link([SupervisorName, ChannelId]) ->
-    supervisor:start_link({local, SupervisorName}, ?MODULE, ChannelId).
+start_link([SupervisorName, ChannelId, ConnManagerServerName]) ->
+    supervisor:start_link({local, SupervisorName}, ?MODULE, [ChannelId, ConnManagerServerName]).
 
 %% ===================================================================
 %% Supervisor callbacks
 %% ===================================================================
 
-init(ChannelId) ->
+init([ChannelId, ConnManagerServerName]) ->
 	
 	%% Set notification server.
 	NotificationServerName = config_helper:get_worker_name(notification_server, ChannelId),
@@ -44,7 +44,7 @@ init(ChannelId) ->
 	DbCleanerCfg = config_helper:get_server_config(db_cleaner_server),
 	DbCleanerServerName = config_helper:get_worker_name(db_cleaner_server, ChannelId),
 	DbCleanerServerSpec = ?CHILD_CHANNEL(DbCleanerServerName, db_cleaner_server, worker, 
-										 [DbCleanerServerName, DbCleanerCfg], infinity),
+										 [DbCleanerServerName, ConnManagerServerName, DbCleanerCfg], infinity),
 	
 	%% Set index cache server.
 	IndexCacheServerCfg = config_helper:get_server_config(index_cache_server),
@@ -62,7 +62,8 @@ init(ChannelId) ->
 	PersistenceCfg = config_helper:get_server_config(persistence_server),
 	PersistenceServerName = config_helper:get_worker_name(persistence_server, ChannelId),
 	HelperServersCfg = {{words_cache_server_name, WordsCacheServerName},{index_cache_server_name, IndexCacheServerName}, 
-				 {cleaner_cache_server_name, DbCleanerServerName}, {notification_server_name, NotificationServerName}},
+				 {cleaner_cache_server_name, DbCleanerServerName}, {notification_server_name, NotificationServerName},
+				 {conn_manager_server_name, ConnManagerServerName}},
 	PersistenceServerSpec = ?CHILD_CHANNEL(PersistenceServerName, persistence_server, worker,
 										   [PersistenceServerName, HelperServersCfg, PersistenceCfg], infinity),
 	
