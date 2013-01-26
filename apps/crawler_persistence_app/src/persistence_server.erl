@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/3, prepare_to_stop/1]).
+-export([start_link/1, add_index/3, retry_add_index/3, prepare_to_stop/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -19,12 +19,16 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link([ServerName, HelperServersCfg]) ->
-    gen_server:start_link({local, ServerName}, ?MODULE, HelperServersCfg, []).
+start_link([ServerName, HelperServersCfg, PersistenceCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [HelperServersCfg, PersistenceCfg], []).
 
 
 add_index(ServerName, Word, UrlId) ->
 	gen_server:cast(ServerName, {add_index, Word, UrlId}).
+
+
+retry_add_index(ServerName, Word, UrlId) ->
+	gen_server:cast(ServerName, {retry_add_index, Word, UrlId}).
 
 
 prepare_to_stop(ServerName) ->
@@ -35,15 +39,16 @@ prepare_to_stop(ServerName) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(HelperServersCfg) ->
+init([HelperServersCfg, PersistenceCfg]) ->
 	process_flag(trap_exit, true),
-    {ok, HelperServersCfg}.
+	[RetryTimeCfg] = PersistenceCfg,
+	{WordsCacheCfg, IndexCacheCfg, ConnManagerCfg} = HelperServersCfg,
+	State = {WordsCacheCfg, IndexCacheCfg, ConnManagerCfg, RetryTimeCfg},
+    {ok, State}.
 
 
 handle_call(prepare_to_stop, _From, State) ->
 	lager:debug("Serving request: prepare_to_stop."),
-%% 	NotificationServerName = get_server_name(notification, State),
-%% 	wait_for_save_word_operations_to_complete(NotificationServerName),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -53,7 +58,13 @@ handle_call(_Request, _From, State) ->
 handle_cast({add_index, Word, UrlId}, State) ->
 	lager:debug("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
 				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
-	add_index_internal(Word, UrlId, State),
+	add_index(first_try, Word, UrlId, State),
+	{noreply, State};
+
+handle_cast({retry_add_index, Word, UrlId}, State) ->
+	lager:debug("Serving request: {add_index, ~p, ~p}. Mailbox queue size: ~p", 
+				[Word, UrlId, element(2,erlang:process_info(self(), message_queue_len)) ]),
+	add_index(retry, Word, UrlId, State),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -113,9 +124,10 @@ get_index_data(WordId, State) ->
 					lager:error("Index not found in cache nor db for existing word id: ~p.", [WordId]),
 					erlang:error(no_index_for_existing_word_id);
 	
-				IndexData ->
+				{UrlIdList, UrlIdListSize} ->
 					lager:debug("Index found in db for word id: ~p", [WordId]),
-					{IndexData, found_in_db}
+					SortredUrlIdList = lists:sort(UrlIdList),
+					{{SortredUrlIdList, UrlIdListSize}, found_in_db}
 			end;
 		
 		IndexData ->
@@ -123,6 +135,22 @@ get_index_data(WordId, State) ->
 			{IndexData, found_in_cache}
 	end.
 				
+
+add_index(first_try, Word, UrlId, State) ->
+	try add_index_internal(Word, UrlId, State)
+	catch 
+		error:no_index_for_existing_word_id ->
+			RetryTime = get_state_value(retry_time, State),
+			timer:apply_after(RetryTime, dispatch_server, dispatch_add_index, [Word, UrlId])
+	end;
+
+add_index(retry, Word, UrlId, State) ->
+	try add_index_internal(Word, UrlId, State)
+	catch
+		error:no_index_for_existing_word_id ->
+			lager:error("Retry failed for index: {~s,~p}.", [Word, UrlId])
+	end.
+
 
 add_index_internal(Word, UrlId, State) ->
 	case get_word_data(Word, State) of
@@ -264,31 +292,6 @@ update_url_id_list([ H | T ], UrlId) ->
 	end.
 
 %%
-%% Spawning helper functions.
-%%
-%% spawn_save_word_to_db(WordId, Word, ConnCfg, State) ->
-%% 	NotificationServerName = get_server_name(notification, State),
-%% 	notification_server:notify(NotificationServerName, save_word_about_to_be_spawned),
-%% 	spawn(
-%% 	  	fun() ->
-%% 			wordsdb_functions:save_word(WordId, Word, ConnCfg),
-%% 			notification_server:notify(NotificationServerName, save_word_completed)
-%% 		end
-%% 	  ),
-%% 	lager:debug("Operation: save cache word doc to db - spawned.").
-%% 
-%% 
-%% wait_for_save_word_operations_to_complete(NotificationServerName) ->
-%% 	case notification_server:get_info(NotificationServerName, all_save_word_completed) of
-%% 		true ->
-%% 			ok;
-%% 		false ->
-%% 			timer:sleep(10),
-%% 			wait_for_save_word_operations_to_complete(NotificationServerName)
-%% 	end.
-%% 
-
-%%
 %% Cache server names helper functions.
 %%
 get_server_name(words, State) ->
@@ -296,9 +299,6 @@ get_server_name(words, State) ->
 
 get_server_name(index, State) ->
 	get_state_value(index_cache_server_name, State);
-
-get_server_name(notification, State) ->
-	get_state_value(notification_server_name, State);
 
 get_server_name(conn_manager, State) ->
 	get_state_value(conn_manager_server_name, State).
@@ -313,8 +313,8 @@ get_state_value(words_cache_server_name, {{words_cache_server_name, Value}, _, _
 get_state_value(index_cache_server_name, {_, {index_cache_server_name, Value}, _, _}) ->
 	Value;
 
-get_state_value(notification_server_name, {_, _,{notification_server_name, Value}, _}) ->
+get_state_value(conn_manager_server_name, {_, _, {conn_manager_server_name, Value}, _}) ->
 	Value;
 
-get_state_value(conn_manager_server_name, {_, _, _, {conn_manager_server_name, Value}}) ->
+get_state_value(retry_time, {_, _, _, {retry_time, Value}}) ->
 	Value.
