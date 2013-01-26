@@ -30,7 +30,7 @@ init(_StartArgs) ->
 	%% Set connectin manager.
 	ConnectionManagerCfg = config_helper:get_server_config(conn_manager_server),
 	ConnManagerServerSpec = ?CHILD_CHANNEL(conn_manager_server_master, conn_manager_server, 
-										   worker, ConnectionManagerCfg, infinity),
+										   worker, [conn_manager_server_master, ConnectionManagerCfg], infinity),
 	
 	%% Set id and dispatch servers.
 	IdAndDispatchServersSup = ?CHILD(id_and_dispatch_servers_sup, supervisor, [], infinity),
