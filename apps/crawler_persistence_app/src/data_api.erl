@@ -72,6 +72,6 @@ get_url_id_list(WordId) ->
 	SelectorDoc = {'_id', WordId}, 
 	ProjectionDoc = {'_id', 0, urls, 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
-	{ok, {{UrlIdList}}} = db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg),
+	{ok, {{url, UrlIdList}}} = db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg),
 	UrlIdList.		
 	
