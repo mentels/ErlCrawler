@@ -18,7 +18,7 @@ process_data(Url_id, Url, Source)->
 		FilterEtsName = list_to_atom(pid_to_list(self())),
 		FilterEtsId = ets:new(FilterEtsName, [set, {keypos, 1}, private, named_table]),
 		save_url(Words, Url_id, FilterEtsId),
-		stats_server:add_page_stats(erlang:list_to_bitstring(Source),erlang:length(Words))
+		stats_server:add_page_stats(erlang:byte_size(erlang:list_to_bitstring(Source)),erlang:length(Words))
 	catch
 		_:_ -> []
 	end.
