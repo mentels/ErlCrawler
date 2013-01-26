@@ -14,7 +14,7 @@
   	]},
   	{conn_manager_cfg, [
   		{pool_size, 10},
-  		{host_cfg, {localhost, 27017}},
+  		{host_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
   		{index_coll, 'Index'}
@@ -27,6 +27,9 @@
  	]},
  	{index_cache_cfg, [
         {max_cache_size, 10000}  					
+ 	]},
+ 	{persistence_cfg, [
+        {retry_time, 10000}  					
  	]}
   ]}
  ]}.

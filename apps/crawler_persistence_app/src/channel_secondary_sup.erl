@@ -35,11 +35,6 @@ start_link([SupervisorName, ChannelId, ConnManagerServerName]) ->
 
 init([ChannelId, ConnManagerServerName]) ->
 	
-	%% Set notification server.
-	NotificationServerName = config_helper:get_worker_name(notification_server, ChannelId),
-	NotificationServerSpec = ?CHILD_CHANNEL(NotificationServerName, notification_server, worker, 
-											NotificationServerName, infinity),
-	
 	%% Set words cache server.
 	WordsCacheServerCfg = config_helper:get_server_config(words_cache_server),
 	WordsCacheServerName = config_helper:get_worker_name(words_cache_server, ChannelId),
@@ -53,13 +48,14 @@ init([ChannelId, ConnManagerServerName]) ->
 										  [IndexCacheServerName, IndexCacheServerCfg], infinity),
 	
 	%% Set persistence server.
+	PersistenceCfg = config_helper:get_server_config(persistence_server),
 	PersistenceServerName = config_helper:get_worker_name(persistence_server, ChannelId),
 	HelperServersCfg = {{words_cache_server_name, WordsCacheServerName}, {index_cache_server_name, IndexCacheServerName},
-						{notification_server_name, NotificationServerName}, {conn_manager_server_name, ConnManagerServerName}},
+						{conn_manager_server_name, ConnManagerServerName}},
 	PersistenceServerSpec = ?CHILD_CHANNEL(PersistenceServerName, persistence_server, worker,
-										   [PersistenceServerName, HelperServersCfg], infinity),
+										   [PersistenceServerName, HelperServersCfg, PersistenceCfg], infinity),
 	
-    ChildrenSpecs = [NotificationServerSpec, WordsCacheServerSpec, IndexCacheServerSpec, PersistenceServerSpec],
+    ChildrenSpecs = [WordsCacheServerSpec, IndexCacheServerSpec, PersistenceServerSpec],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 

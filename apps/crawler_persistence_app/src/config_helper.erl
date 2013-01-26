@@ -58,6 +58,10 @@ get_server_config_internal(index_cache_server) ->
 	{ok, IndexCacheCfg} = application:get_env(index_cache_cfg),
 	IndexCacheCfg;
 
+get_server_config_internal(persistence_server) ->
+	{ok, PersistenceCfg} = application:get_env(persistence_cfg),
+	PersistenceCfg;
+
 get_server_config_internal(_Other) ->
 	undefined.
 
