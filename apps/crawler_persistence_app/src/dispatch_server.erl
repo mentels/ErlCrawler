@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, dispatch_add_index/2, prepare_to_stop/0]).
+-export([start_link/1, dispatch_add_index/2, report_queues/0, prepare_to_stop/0]).
 -export([dispatch_add_index/4]).
 
 %% ------------------------------------------------------------------
@@ -26,6 +26,10 @@ start_link(DispatcherCfg) ->
 
 dispatch_add_index(Word, UrlId) ->
 	gen_server:cast(?SERVER, {dispatch_add_index, Word, UrlId}).
+
+
+report_queues() ->
+	gen_server:cast(?SERVER, report_queues).
 
 
 prepare_to_stop() ->
@@ -62,6 +66,17 @@ handle_cast({dispatch_add_index, Word, UrlId}, State)->
 	DispatchTabId = get_state_value(dispatch_tab_id, State),
 	ChannelsCnt = get_state_value(channels_cnt, State),
 	spawn(?MODULE, dispatch_add_index, [Word, UrlId, DispatchTabId, ChannelsCnt]),
+	{noreply, State};
+
+handle_cast(report_queues, State) ->
+	DispatchTabId = get_state_value(dispatch_tab_id, State),
+	lists:foreach(fun(I) ->
+					{ChannelId, PersistenceServerName} = I,
+					Pid = whereis(PersistenceServerName),
+					lager:info("Channel ~p queue size: ~p", 
+							   [ChannelId, element(2,erlang:process_info(Pid, message_queue_len))])
+				end, 
+		ets:match_object(DispatchTabId, '$1')),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->

@@ -37,6 +37,7 @@ init(IdCfg) ->
 	 	{init_word_id, WordId},
 		{init_bucket_id, BucketId}
 	] = IdCfg,
+
 	%% The state always holds the ids that will be returned in the next calls to 
 	%% either get_word_id/0 or get_bucket_id/0.
 	State = {WordId, BucketId},
