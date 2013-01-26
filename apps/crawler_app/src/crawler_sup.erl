@@ -27,7 +27,8 @@ init(_StartArgs) ->
 	{ok, [{max_workers,Max_workers},{uds_fail_interval,Uds_fail_interval},{connection_timeout,Connection_timeout},{download_timeout,Download_timeout},{redirect_limit,Redirect_limit}]} = application:get_env(processing_cfg),
 	Processing_server_spec = ?CHILD(download_manager,worker,{Max_workers,Uds_fail_interval,Connection_timeout,Download_timeout,Redirect_limit}),
 	Stoplist_server_spec = ?CHILD(stoplist_server,worker,{}),
- 	ChildrenSpecs = [Processing_server_spec,Stoplist_server_spec],
+	Stats_server_spec = ?CHILD(stats_server,worker,{}),
+ 	ChildrenSpecs = [Processing_server_spec,Stoplist_server_spec,Stats_server_spec],
     RestartStrategy = { one_for_one , 5, 10},
     {ok, {RestartStrategy, ChildrenSpecs}}.
 
