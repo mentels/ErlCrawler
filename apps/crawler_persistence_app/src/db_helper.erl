@@ -60,7 +60,7 @@ perform_db_action({count, SelectorDoc}, {CollName, DbName, Conn}) ->
 
 
 perform_mongo_action(Action, DbName, Conn) ->
-	WriteMode = unsafe,
+	WriteMode = safe,
 	ReadMode = master,
 	case mongo:do(WriteMode, ReadMode, Conn, DbName, Action) of
 		{failure, FailureDesc} ->
