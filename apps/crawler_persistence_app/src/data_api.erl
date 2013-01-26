@@ -11,15 +11,12 @@
 %% ------------------------------------------------------------------
 
 get_index(Word) ->
-	case get_word_id_and_bucket_id_list(Word) of
-		no_bucket ->
-			[];
-		
+	case get_word_id(Word) of
 		no_word ->
 			[];
 		
-		{WordId, BucketIdList} ->
-			get_url_id_list(BucketIdList, WordId)
+		WordId ->
+			get_url_id_list(WordId)
 	end.
 
 
@@ -32,7 +29,7 @@ get_count(index_coll) ->
 	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(indexes) ->
-	ProjectionDoc = {'_id', 0, url_cnt, 1},
+	ProjectionDoc = {'_id', 0, urls_cnt, 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	{ok, Cursor} = db_helper:perform_action({find, {}, ProjectionDoc}, ConnCfg),
 	case mongo:rest(Cursor) of
@@ -41,7 +38,7 @@ get_count(indexes) ->
 		
 		UrlCntList ->
 			Sum =lists:foldl(fun(X, Sum) ->
-								{url_cnt, Cnt} = X,
+								{url_cnts, Cnt} = X,
 								Sum + Cnt
 						end, 0, UrlCntList),
 			{ok, Sum}
@@ -56,22 +53,13 @@ get_count(indexes) ->
 %%
 %% Bucket id retrieving helper functions.
 %%
-get_word_id_and_bucket_id_list(Word) ->
+get_word_id(Word) ->
 	SelectorDoc = {word, bson:utf8(Word)},
-	ProjectionDoc = {'_id', 1, active_bucket_id, 1, frozen_bucket_id, 1},
+	ProjectionDoc = {'_id', 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, words),
 	case db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg) of
-		{ok, {{'_id', _, active_bucket_id, <<"unspec">>, frozen_bucket_id, []}}} ->
+		{ok, {{'_id', WordId}}} ->
 			no_bucket;
-		
-		{ok, {{'_id', WordId, active_bucket_id, <<"unspec">>, frozen_bucket_id, BucketIdList}}} ->
-			{WordId, BucketIdList};
-		
-		{ok, {{'_id', WordId, active_bucket_id, BucketId, frozen_bucket_id, []}}} ->
-			{WordId, [BucketId]};
-		
-		{ok, {{'_id', WordId, active_bucket_id, BucketId, frozen_bucket_id, BucketIdList}}} ->
-			{WordId, [BucketId | BucketIdList]};
 		
 		{ok, {}} ->
 			no_word
@@ -80,19 +68,10 @@ get_word_id_and_bucket_id_list(Word) ->
 %%%
 %%% Index retrieving helper functions.
 %%%
-get_url_id_list(BucketIdList, WordId) ->
-	SelectorDoc = {'_id', { bson:utf8("$in"), BucketIdList}}, 
-	ProjectionDoc = {indicies, 1, '_id', 0},
+get_url_id_list(WordId) ->
+	SelectorDoc = {'_id', WordId}, 
+	ProjectionDoc = {'_id', 0, urls, 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
-	{ok, Cursor} = db_helper:perform_action({find, SelectorDoc, ProjectionDoc}, ConnCfg),
-	retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, mongo:rest(Cursor), []).
-		
-
-retrieve_url_id_list_from_list_of_db_index_doc_list(_, [], ResultUrlIdList) ->
-	ResultUrlIdList;
-	
-retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, [ {indicies, DbIndexDocList} | T ], ResultUrlIdList) ->
-	DbIndexDoc = lists:keyfind(WordId, 2, DbIndexDocList),
-	{_, _, _, [UrlIdList, _]} = DbIndexDoc,
-	retrieve_url_id_list_from_list_of_db_index_doc_list(WordId, T, UrlIdList ++ ResultUrlIdList).
+	{ok, {{UrlIdList}}} = db_helper:perform_action({find_one, SelectorDoc, ProjectionDoc}, ConnCfg),
+	UrlIdList.		
 	
