@@ -42,8 +42,8 @@ init(HelperServersCfg) ->
 
 handle_call(prepare_to_stop, _From, State) ->
 	lager:debug("Serving request: prepare_to_stop."),
-	NotificationServerName = get_state_value(notification_server_name, State),
-	wait_for_save_word_operations_to_complete(NotificationServerName),
+%% 	NotificationServerName = get_server_name(notification, State),
+%% 	wait_for_save_word_operations_to_complete(NotificationServerName),
 	{reply, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -88,7 +88,7 @@ get_word_data(Word, State) ->
 					lager:debug("Word id not found in cache nor in db. New cache word doc created: {~p, ~p}.", 
 								[Word, WordId]),
 					update_words_cache({add_word_cache_doc, {Word, WordId}}, State),
-					spawn_save_word_to_db2(WordId, Word, ConnCfg, State),
+					wordsdb_functions:save_word(WordId, Word, ConnCfg),
 					{WordId, new};
 				
 				WordId ->
@@ -103,39 +103,76 @@ get_word_data(Word, State) ->
 			{WordId, was_present}
 	
 	end.
+
+get_index_data(WordId, State) ->
+	case get_index_data_from_cache(WordId, State) of
+		index_not_found ->
+			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
+			case get_index_data_from_db(WordId, ConnCfg) of
+				no_index ->
+					lager:error("Index not found in cache nor db for existing word id: ~p.", [WordId]),
+					erlang:error(no_index_for_existing_word_id);
+	
+				IndexData ->
+					lager:debug("Index found in db for word id: ~p", [WordId]),
+					{IndexData, found_in_db}
+			end;
+		
+		IndexData ->
+			lager:debug("Index found in cache for word id: ~p", [WordId]),
+			{IndexData, found_in_cache}
+	end.
 				
 
 add_index_internal(Word, UrlId, State) ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
 	case get_word_data(Word, State) of
 		{WordId, was_present} ->
-			case indexdb_functions:is_index_present(WordId, UrlId, ConnCfg) of
-				true ->
-					lager:debug("Index exists: {~p, ~p}", [WordId, UrlId]),
-					ok;
+			case get_index_data(WordId, State) of
+				{IndexData, found_in_db} ->
+					lager:debug("Adding new index cache doc for word id: ~p.", [WordId]),
+					{UpdateStatus, {UrlIdList, UrlIdListSize}} = update_index_data(IndexData, UrlId),
+					update_index_cache({add_index_cache_doc, {WordId, UrlIdList, UrlIdListSize}}, State);
 				
-				false ->
-					lager:debug("Updating index: {~p, ~p}", [WordId, UrlId]),
-					indexdb_functions:update_index(WordId, UrlId, ConnCfg)
+				{IndexData, found_in_cache} ->
+					{UpdateStatus, {UrlIdList, UrlIdListSize}} = update_index_data(IndexData, UrlId),
+					case UpdateStatus of
+						updated ->
+							lager:debug("Updating index data in cache: {~p, ~p}", [WordId, UrlId]),
+							update_index_cache({update_index_data, WordId, {UrlIdList, UrlIdListSize}}, State);
+						
+						not_updated ->
+							lager:debug("Index data up-to-date for word id: ~p.", [WordId]),
+							ok
+					end
+			end,
+			case UpdateStatus of
+				updated ->
+					lager:debug("Updating index in db: {~p, ~p}", [WordId, UrlId]),
+					{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
+					indexdb_functions:update_index_data(WordId, UrlId, ConnCfg);			
+
+				not_updated ->
+					ok
 			end;
 		
 		{WordId, new} ->
 			lager:debug("Creating new index: {~p, ~p}", [WordId, UrlId]),
+			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
+			update_index_cache({add_index_cache_doc, {WordId, [UrlId], 1}}, State),
 			indexdb_functions:save_new_index(WordId, UrlId, ConnCfg),
 			ok
 	end.
 			
 
 %%%
-%%% Word data obtaining helper functions.
+%%% Word id obtaining helper functions.
 %%%
 get_word_id_from_cache(Word, State) ->
-	{ok, WordData} = words_cache_server:get_word_id(get_server_name(words, State), Word),
-	WordData.
+	{ok, WordId} = words_cache_server:get_word_id(get_server_name(words, State), Word),
+	WordId.
 
 get_word_id_from_db(Word, ConnCfg) ->
 	wordsdb_functions:get_word_id(Word, ConnCfg).
-
 
 
 %%
@@ -159,37 +196,109 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 	end.
 
 
+%%
+%% Index obtaining helper functions.
+%%
+get_index_data_from_cache(WordId, State) ->
+	{ok, IndexData} = index_cache_server:get_index_data(get_server_name(index, State), WordId),
+	IndexData.
+
+
+get_index_data_from_db(WordId, ConnCfg) ->
+	indexdb_functions:get_index_data(WordId, ConnCfg).
+
+
+%% 
+%% Index cache handling helper functions
+%%
+update_index_cache({add_index_cache_doc, CacheIndexDoc}, State) ->
+	case index_cache_server:add_index_cache_doc(get_server_name(index, State), CacheIndexDoc) of
+		ok ->
+			ok;
+			
+		{ok, full} ->
+			index_cache_server:flush_and_add_index_cache_doc(get_server_name(index, State), CacheIndexDoc),
+			lager:debug("Index cache flushed and updated with new cache index for word id: ~p.", [CacheIndexDoc])
+			
+	end;
+
+update_index_cache({update_index_data, WordId, IndexData}, State) ->
+	case index_cache_server:update_index_data(get_server_name(index, State), WordId, IndexData) of
+		ok ->
+			ok;
+			
+		{ok, full} ->
+			CacheIndexDoc = {WordId, element(1, IndexData), element(2, IndexData)},
+			index_cache_server:flush_and_add_index_cache_doc(get_server_name(index, State), CacheIndexDoc),
+			lager:debug("Index cache flushed and updated with new cache index for word id: ~p.", [WordId])
+			
+	end.
+
+
+%%
+%% Index updating helper functions
+%%
+update_index_data({UrlIdList, UrlIdListSize}, UrlId) ->
+	case update_url_id_list(UrlIdList, UrlId) of
+		{not_updated, UrlIdList} ->
+			{not_updated, {UrlIdList, UrlIdListSize}};
+
+		{updated, UpdatedUrlIdList} -> 
+			{updated, {UpdatedUrlIdList, UrlIdListSize + 1}}
+	end.
+
+
+update_url_id_list([], UrlId) ->
+	{updated, [UrlId]};
+
+update_url_id_list([ H | T ], UrlId) ->
+	%% Decending order.
+	if 
+		UrlId > H ->
+			{updated, [ UrlId | [ H | T ] ]};
+		UrlId < H ->
+			{Status, List} = update_url_id_list(T, UrlId),
+			{Status, [ H | List ]};
+		UrlId == H ->
+			{not_updated, [ H | T ]}
+	end.
 
 %%
 %% Spawning helper functions.
 %%
-spawn_save_word_to_db2(WordId, Word, ConnCfg, State) ->
-	NotificationServerName = get_state_value(notification_server_name, State),
-	notification_server:notify(NotificationServerName, save_word_about_to_be_spawned),
-	spawn(
-	  	fun() ->
-			wordsdb_functions:save_word(WordId, Word, ConnCfg),
-			notification_server:notify(NotificationServerName, save_word_completed)
-		end
-	  ),
-	lager:debug("Operation: save cache word doc to db - spawned.").
-
-
-wait_for_save_word_operations_to_complete(NotificationServerName) ->
-	case notification_server:get_info(NotificationServerName, all_save_word_completed) of
-		true ->
-			ok;
-		false ->
-			timer:sleep(10),
-			wait_for_save_word_operations_to_complete(NotificationServerName)
-	end.
-
+%% spawn_save_word_to_db(WordId, Word, ConnCfg, State) ->
+%% 	NotificationServerName = get_server_name(notification, State),
+%% 	notification_server:notify(NotificationServerName, save_word_about_to_be_spawned),
+%% 	spawn(
+%% 	  	fun() ->
+%% 			wordsdb_functions:save_word(WordId, Word, ConnCfg),
+%% 			notification_server:notify(NotificationServerName, save_word_completed)
+%% 		end
+%% 	  ),
+%% 	lager:debug("Operation: save cache word doc to db - spawned.").
+%% 
+%% 
+%% wait_for_save_word_operations_to_complete(NotificationServerName) ->
+%% 	case notification_server:get_info(NotificationServerName, all_save_word_completed) of
+%% 		true ->
+%% 			ok;
+%% 		false ->
+%% 			timer:sleep(10),
+%% 			wait_for_save_word_operations_to_complete(NotificationServerName)
+%% 	end.
+%% 
 
 %%
 %% Cache server names helper functions.
 %%
 get_server_name(words, State) ->
 	get_state_value(words_cache_server_name, State);
+
+get_server_name(index, State) ->
+	get_state_value(index_cache_server_name, State);
+
+get_server_name(notification, State) ->
+	get_state_value(notification_server_name, State);
 
 get_server_name(conn_manager, State) ->
 	get_state_value(conn_manager_server_name, State).
@@ -198,11 +307,14 @@ get_server_name(conn_manager, State) ->
 %% State handling helper functions.
 %% 
 
-get_state_value(words_cache_server_name, {{words_cache_server_name, Value}, _, _}) ->
+get_state_value(words_cache_server_name, {{words_cache_server_name, Value}, _, _, _}) ->
 	Value;
 
-get_state_value(notification_server_name, {_, {notification_server_name, Value}, _}) ->
+get_state_value(index_cache_server_name, {_, {index_cache_server_name, Value}, _, _}) ->
 	Value;
 
-get_state_value(conn_manager_server_name, {_, _, {conn_manager_server_name, Value}}) ->
+get_state_value(notification_server_name, {_, _,{notification_server_name, Value}, _}) ->
+	Value;
+
+get_state_value(conn_manager_server_name, {_, _, _, {conn_manager_server_name, Value}}) ->
 	Value.

@@ -54,6 +54,10 @@ get_server_config_internal(words_cache_server) ->
 	{ok, WordsCacheCfg} = application:get_env(words_cache_cfg),
 	WordsCacheCfg;
 
+get_server_config_internal(index_cache_server) ->
+	{ok, IndexCacheCfg} = application:get_env(index_cache_cfg),
+	IndexCacheCfg;
+
 get_server_config_internal(_Other) ->
 	undefined.
 
@@ -66,8 +70,8 @@ get_channels_config_internal() ->
 set_indexes_internal() ->
 	case get_max_word_id() of
 		no_id ->
-			create_index_on_words_coll(),
-			create_index_on_index_coll();	
+			create_index_on_words_coll();
+%% 			create_index_on_index_coll();	
 		
 		_ ->
 			ok
@@ -111,7 +115,7 @@ create_index_on_words_coll() ->
 	IndexSpec = {key, {word, 1}, unique, true},
 	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).
 
-create_index_on_index_coll() ->
-	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
-	IndexSpec = {key, {'_id', 1, urls, 1}, unique, true},
-	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).
+%% create_index_on_index_coll() ->
+%% 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
+%% 	IndexSpec = {key, {'_id', 1, urls, 1}, unique, true},
+%% 	db_helper:perform_action({create_index, IndexSpec}, ConnCfg).

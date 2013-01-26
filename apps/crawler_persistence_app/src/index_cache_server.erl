@@ -6,7 +6,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1, add_index/2, update_index_data/3, get_index_data/2, retrieve_all_indicies/1]).
+-export([start_link/1, add_index_cache_doc/2, update_index_data/3, 
+		 flush_and_add_index_cache_doc/2, get_index_data/2, flush/1]).
 -export([get_state/1]).
 
 %% ------------------------------------------------------------------
@@ -20,53 +21,63 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link([ServerName, CacheCfg]) ->
-    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, CacheCfg], []).
+start_link([ServerName, IndexCacheCfg]) ->
+    gen_server:start_link({local, ServerName}, ?MODULE, [ServerName, IndexCacheCfg], []).
 
-add_index(ServerName, CacheDoc) ->
-	gen_server:call(ServerName, {add_index, CacheDoc}).
+
+add_index_cache_doc(ServerName, CacheIndexDoc) ->
+	gen_server:call(ServerName, {add_cache_index_doc, CacheIndexDoc}).
+
 
 update_index_data(ServerName, WordId, IndexData) ->
 	gen_server:call(ServerName, {update_index_data, WordId, IndexData}).
 
+
+flush_and_add_index_cache_doc(ServerName, CacheIndexDoc) ->
+	gen_server:cast(ServerName, {flush_and_add_cache_index_doc, CacheIndexDoc}).
+
+
 get_index_data(ServerName, WordId) ->
 	gen_server:call(ServerName, {get_index_data, WordId}).
 
-retrieve_all_indicies(ServerName) ->
-	gen_server:call(ServerName, {retrieve_all_indicies}).
+
+flush(ServerName) ->
+	gen_server:cast(ServerName, flush).
+
 
 get_state(ServerName) ->
-	gen_server:call(ServerName, {get_state}).
+	gen_server:call(ServerName, get_state).
+
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([ServerName, CacheCfg]) ->
+init([ServerName, WordsCacheCfg]) ->
 	process_flag(trap_exit, true),
-	[MaxCacheSizeCfg] = CacheCfg,
+	[MaxCacheSizeCfg] = WordsCacheCfg,
 	EtsName = list_to_atom(atom_to_list(ServerName) ++ "_cache"),
 	CacheTabId = ets:new(EtsName, [set, {keypos, 1}, private, named_table]),
 	State = {{cache_tab_id, CacheTabId}, {size, 0}, MaxCacheSizeCfg},
     {ok, State}.
 
 
-handle_call({add_index, CacheDoc}, _From, State) ->
-	UpdatedState = update_state({add_index, CacheDoc}, State),
-	case is_cache_full(UpdatedState) of
+handle_call({update_index_data, WordId, IndexData}, _From, State) ->
+	case is_cache_full(State) of
 		false -> 
+			UpdatedState = update_state({update_index_data, WordId, IndexData}, State),
 			{reply, ok, UpdatedState};
 		true ->
-			{reply, {ok, full}, UpdatedState}
+			{reply, {ok, full}, State}
 	end;
 
-handle_call({update_index_data, WordId, IndexData}, _From, State) ->
-	UpdatedState = update_state({update_index_data, WordId, IndexData}, State),
-	case is_cache_full(UpdatedState) of
+handle_call({add_cache_index_doc, CacheIndexDoc}, _From, State) ->
+	case is_cache_full(State) of
 		false -> 
+			UpdatedState = update_state({add_cache_index_doc, CacheIndexDoc}, State),
 			{reply, ok, UpdatedState};
 		true ->
-			{reply, {ok, full}, UpdatedState}
+			{reply, {ok, full}, State}
 	end;
 
 handle_call({get_index_data, WordId}, _From, State) ->
@@ -77,19 +88,25 @@ handle_call({get_index_data, WordId}, _From, State) ->
 			{reply, {ok, IndexData}, State}
 	end;
 
-handle_call({retrieve_all_indicies}, _From, State) ->
-	{CacheDocList, UpdatedState} = update_state({retrieve_all_indicies}, State),
-	{reply, {ok, CacheDocList}, UpdatedState};
-
-handle_call({get_state}, _From, State) ->
+handle_call(get_state, _From, State) ->
 	{reply, State, State};
 
 handle_call(_Request, _From, State) ->
 	{reply, ok, State}.
 
 
+handle_cast({flush_and_add_cache_index_doc, CacheIndexDoc}, State) ->
+	UpdatedState = update_state(flush, State),
+	{noreply, update_state({add_cache_index_doc, CacheIndexDoc}, UpdatedState)};
+
+handle_cast(flush, State) ->
+	UpdatedState = update_state(flush, State),
+	{noreply, UpdatedState};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
+
+
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -112,36 +129,32 @@ code_change(_OldVsn, State, _Extra) ->
 
 get_index_data_internal(WordId, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
-	case ets:match(CacheTabId, {WordId, '$0', '$1', '_', '_'}) of
+	case ets:match(CacheTabId, {WordId, '$0', '$1'}) of
 		[] ->
 			{};
 
 		[[UrlIdList, UrlIdListSize]] ->
-			IndexData = {UrlIdList, UrlIdListSize},
-			IndexData
+			{UrlIdList, UrlIdListSize}
 
 	end.
 
 %%
 %% Higher level state handling functions.
 %%
-update_state({add_index, CacheDoc}, State) ->
-	{_, _, UrlIdListSize, _, _} = CacheDoc,
+update_state({add_cache_index_doc, CacheIndexDoc}, State) ->
 	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
-	ets:insert(CacheTabId, CacheDoc),
-	update_state_value({size, Size + UrlIdListSize}, State);
+	ets:insert(CacheTabId, CacheIndexDoc),
+	update_state_value({size, Size + element(3, CacheIndexDoc)}, State);
 
-update_state({update_index_data, WordId, IndexData}, State) ->
-	{UrlIdList, UrlIdListSize} = IndexData,
+update_state({update_index_data, WordId, {UrlIdList, UrlIdListSize}}, State) ->
 	{CacheTabId, Size} = get_state_value(cache_tab_id_and_size, State),
 	ets:update_element(CacheTabId, WordId, [{2, UrlIdList}, {3, UrlIdListSize}]),
 	update_state_value({size, Size + 1}, State);
 
-update_state({retrieve_all_indicies}, State) ->
+update_state(flush, State) ->
 	CacheTabId = get_state_value(cache_tab_id, State),
-	CacheDocList = ets:match_object(CacheTabId, '$1'),
 	ets:delete_all_objects(CacheTabId),
-	{CacheDocList, update_state_value({size, 0}, State)}.
+	update_state_value({size, 0}, State).
 
 
 %%
