@@ -71,7 +71,8 @@ get_all_lines(Device, Accum) ->
 
 handle_call({check_word,Word}, From, {T,EngWords,PolWords}) ->
 	%% Slowo ma nie byc na stopliscie, a ma byc w etsach ze slowami jezyka
-	Status = (not ets:member(T, Word)) andalso (ets:member(EngWords,Word) orelse ets:member(PolWords,Word)), 
+%% 	Status = (not ets:member(T, Word)) andalso (ets:member(EngWords,Word) orelse ets:member(PolWords,Word)),
+	Status = (not ets:member(T, Word)), 
     {reply,Status , {T,EngWords,PolWords}}.
 
 
