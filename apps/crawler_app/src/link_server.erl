@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([get_link/0]).
+-export([get_link/0,processed_links/0]).
 
 
 
@@ -46,6 +46,8 @@ get_all_lines(Device, Accum) ->
         eof  -> file:close(Device), Accum;
         Line -> get_all_lines(Device, Accum ++ [string:strip(Line,right,$\n)])
     end.
+processed_links() ->
+	gen_server:call(?MODULE,processed_links).
 
 get_link()->
 	gen_server:call(?MODULE,get_link).
@@ -78,8 +80,10 @@ handle_call(get_link, From, {Urls, No}=State) ->
 	end,			 
 			%% application:stop(crawler),
 			%% application:stop(crawler_persistence);
-    {reply, Reply, { Rest, No+1}}.
+    {reply, Reply, { Rest, No+1}};
 
+handle_call(processed_links, From, {Urls, No}=State) ->
+	{reply, No, { Urls, No}}.
 
 %% handle_cast/2
 %% ====================================================================

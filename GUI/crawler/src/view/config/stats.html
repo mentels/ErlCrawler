@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+Statystyki : 
+
+{% for node_name, node_stat in stats %}
+<p>{{ node_name }} : <br>
+	{% for stat,value in node_stat %}
+	
+	{% if stat=="memory_total" %}
+		{{ "Zużycie pamięci" }} : 
+			{% for val,unit in value %}
+				{{val}}{{unit}}{{" "}}
+			{% endfor %}
+		<br>	
+	{% elif stat=="uptime" %}
+		{{ "Czas działania " }}
+		{% for val,unit in value %}
+			{{val}}{{unit}}{{" "}}
+		{% endfor %}
+		<br>
+	{% elif stat=="input_data" %}
+		{{ "Pobrano danych" }} : 
+			{% for val,unit in value %}
+				{{val}}{{unit}}{{" "}}
+			{% endfor %}
+		<br>
+	{% elif stat=="index_coll" %}
+		{{"Ilość wpisów z indeksami:"}}
+		{{stat}}:{{value}}<br>
+	{% elif stat=="indexes" %}
+		{{"Ilość indeksów:"}}
+		{{value}}<br>
+	{% elif stat=="words_coll" %}
+		{{"Ilość znalezionych słów:"}}
+		{{value}}<br>
+	{% elif stat=="processed_links" %}
+		{{"Ilość przetworzonych linków:"}}
+		{{value}}<br>
+	{% endif %}
+	{% endfor %}
+</p>
+{% endfor %}
+
+{% endblock %}

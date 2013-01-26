@@ -17,7 +17,8 @@ process_data(Url_id, Url, Source)->
 		lager:log(notice,self(),string:concat(string:concat(Url, " "),erlang:integer_to_list(erlang:length(Words)))),
 		FilterEtsName = list_to_atom(pid_to_list(self())),
 		FilterEtsId = ets:new(FilterEtsName, [set, {keypos, 1}, private, named_table]),
-		save_url(Words, Url_id, FilterEtsId)
+		save_url(Words, Url_id, FilterEtsId),
+		stats_server:add_page_stats(erlang:byte_size(Source),erlang:length(Words))
 	catch
 		_:_ -> []
 	end.

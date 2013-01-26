@@ -1,0 +1,10 @@
+{application, crawler, [
+        {description, "ErlangCrawler"},
+        {vsn, "0.0.1"},
+        {modules, []},
+        {registered, []},
+        {applications, [kernel, stdlib, crypto, boss]},
+        {env, [{nodes,
+  			['node1@127.0.0.1', 'node2@127.0.0.1', 'node3@127.0.0.1', 'node4@127.0.0.1', 'node5@127.0.0.1']
+  		}]}
+    ]}.
