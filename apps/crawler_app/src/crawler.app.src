@@ -24,6 +24,7 @@
   			]  			
   		},
   		{eng_words,'eng_words.txt'},
-  		{pol_words,'pol_words.txt'}
+  		{pol_words,'pol_words.txt'},
+  		{stat_interval,20000}
   		]}
  ]}.
