@@ -10,7 +10,7 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 10}
+  		{channels_cnt, 100}
   	]},
   	{conn_manager_cfg, [
   		{pool_size, 10},
@@ -23,10 +23,10 @@
 		{init_word_id, 1000}
 	]},				
  	{words_cache_cfg, [
-        {max_cache_size, 10000}  					
+        {max_cache_size, 1000}  					
  	]},
  	{index_cache_cfg, [
-        {max_cache_size, 100000}  					
+        {max_cache_size, 10000}  					
  	]}
   ]}
  ]}.
