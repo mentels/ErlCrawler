@@ -10,7 +10,7 @@
   {mod, { crawler_app, []}},
   {env, [{processing_cfg,
   			[
-  			 {max_workers, 100},
+  			 {max_workers, 50},
   			 {uds_fail_interval, 500},
   			 {connection_timeout, 3000},
   			 {download_timeout, 15000},
