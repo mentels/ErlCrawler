@@ -13,7 +13,7 @@
   		{channels_cnt, 1000}
   	]},
   	{conn_manager_cfg, [
-  		{pool_size, 10},
+  		{pool_size, 50},
   		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
