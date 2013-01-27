@@ -10,11 +10,11 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 20}
+  		{channels_cnt, 2}
   	]},
   	{conn_manager_cfg, [
   		{pool_size, 10},
-  		{host_cfg, {localhost, 27017}},
+  		{host_cfg, {backrub2.iisg.agh.edu.pl, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},
   		{index_coll, 'Index'}
