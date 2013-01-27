@@ -126,7 +126,7 @@ get_index_data(WordId, State) ->
 	
 				{UrlIdList, UrlIdListSize} ->
 					lager:debug("Index found in db for word id: ~p", [WordId]),
-					SortredUrlIdList = lists:sort(UrlIdList),
+					SortredUrlIdList = lists:sort(get_url_id_list_sort_fun(), UrlIdList),
 					{{SortredUrlIdList, UrlIdListSize}, found_in_db}
 			end;
 		
@@ -191,6 +191,17 @@ add_index_internal(Word, UrlId, State) ->
 			ok
 	end.
 			
+
+get_url_id_list_sort_fun() ->
+	Fun = fun(X, Y) ->
+				  if
+					X > Y ->
+						true;
+					true ->
+						false
+				  end
+		  end,
+	Fun.
 
 %%%
 %%% Word id obtaining helper functions.
