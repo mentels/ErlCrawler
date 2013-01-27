@@ -29,18 +29,18 @@ get_count(index_coll) ->
 	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(indexes) ->
-	ProjectionDoc = {'_id', 0, urls_cnt, 1},
+	ProjectionDoc = {'_id', 0, urls, 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	{ok, Cursor} = db_helper:perform_action({find, {}, ProjectionDoc}, ConnCfg),
 	case mongo:rest(Cursor) of
 		[] ->
 			{ok, 0};
 		
-		UrlCntList ->
+		ListOfUrlIdList ->
 			Sum =lists:foldl(fun(X, Sum) ->
-								{urls_cnt, Cnt} = X,
-								Sum + Cnt
-						end, 0, UrlCntList),
+								{urls, UrlIdList} = X,
+								Sum + length(UrlIdList)
+						end, 0, ListOfUrlIdList),
 			{ok, Sum}
 	end.
 
