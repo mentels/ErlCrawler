@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/1, dispatch_add_index/2, report_queues/0, prepare_to_stop/0]).
--export([dispatch_add_index/4]).
+-export([dispatch_add_index/5]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -45,7 +45,7 @@ init(DispatcherCfg) ->
 	{{channels_cnt, ChannelsCnt}, {persistence_server_names, PersistenceServerNameList}} = DispatcherCfg,
 	DispatchTabId = ets:new(dispatch_table, [set, {keypos, 1}, protected, named_table]),
 	set_dispatch_table(DispatchTabId, ChannelsCnt, PersistenceServerNameList),
-	State = {{dispatch_tab_id, DispatchTabId}, {channels_cnt, ChannelsCnt}},
+	State = {{dispatch_tab_id, DispatchTabId}, {channels_cnt, ChannelsCnt}, {request_cnt, 0}},
     {ok, State}.
 
 
@@ -65,8 +65,15 @@ handle_call(_Request, _From, State) ->
 handle_cast({dispatch_add_index, Word, UrlId}, State)->
 	DispatchTabId = get_state_value(dispatch_tab_id, State),
 	ChannelsCnt = get_state_value(channels_cnt, State),
-	spawn(?MODULE, dispatch_add_index, [Word, UrlId, DispatchTabId, ChannelsCnt]),
-	{noreply, State};
+	RequestCnt = get_state_value(request_cnt, State),
+	spawn(?MODULE, dispatch_add_index, [Word, UrlId, DispatchTabId, ChannelsCnt, RequestCnt + 1]),
+	case RequestCnt + 1 == ChannelsCnt of
+		true ->
+			{noreply, set_state_value({request_cnt, 0}, State)};
+			
+		false ->
+			{noreply, set_state_value({request_cnt, RequestCnt + 1}, State)}
+	end;
 
 handle_cast(report_queues, State) ->
 	DispatchTabId = get_state_value(dispatch_tab_id, State),
@@ -109,18 +116,24 @@ set_dispatch_table(DispatchTabId, ChannelsCnt, [PersistenceServerName| T]) ->
 	set_dispatch_table(DispatchTabId, ChannelsCnt - 1, T).
 
 
-dispatch_add_index(Word, UrlId, DispatchTabId, ChannelsCnt) ->
-	Key = erlang:phash(Word, ChannelsCnt),
-	[[PersistenceServerName]] = ets:match(DispatchTabId, {Key, '$0'}),
+dispatch_add_index(Word, UrlId, DispatchTabId, _ChannelsCnt, RequestCnt) ->
+%% 	Key = erlang:phash(Word, ChannelsCnt),
+	[[PersistenceServerName]] = ets:match(DispatchTabId, {RequestCnt, '$0'}),
 	persistence_server:add_index(PersistenceServerName, Word, UrlId).
 
 
 %%
 %% State handling helper functions.
 %%
+set_state_value({request_cnt, RequestCnt}, {Cfg1, Cfg2, _}) ->
+	{Cfg1, Cfg2, {request_cnt, RequestCnt}}.
 
-get_state_value(dispatch_tab_id, {{dispatch_tab_id, DispatchTabId}, _}) ->
+
+get_state_value(dispatch_tab_id, {{dispatch_tab_id, DispatchTabId}, _, _}) ->
 	DispatchTabId;
 
-get_state_value(channels_cnt, {_, {channels_cnt, ChannelsCnt}}) ->
-	ChannelsCnt.
+get_state_value(channels_cnt, {_, {channels_cnt, ChannelsCnt}, _}) ->
+	ChannelsCnt;
+
+get_state_value(request_cnt, {_, _, {request_cnt, RequestCnt}}) ->
+	RequestCnt.
