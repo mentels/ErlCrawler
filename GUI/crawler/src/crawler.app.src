@@ -5,6 +5,6 @@
         {registered, []},
         {applications, [kernel, stdlib, crypto, boss]},
         {env, [{nodes,
-  			['node1@127.0.0.1', 'node2@127.0.0.1', 'node3@127.0.0.1', 'node4@127.0.0.1', 'node5@127.0.0.1']
+  			['Tbackrub2@172.16.31.1', 'Tnode2@172.16.31.2', 'Tnode3@172.16.31.3', 'Tnode4@172.16.31.4', 'Tnode5@172.16.31.5']
   		}]}
     ]}.
