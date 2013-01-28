@@ -82,7 +82,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 close_pool(State) ->
-	Pool = get_state_value(pool, State),
+	Pool = get_state_value(conn_pool, State),
 	resource_pool:close(Pool).
 
 
