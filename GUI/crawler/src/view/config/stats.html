@@ -2,7 +2,6 @@
 
 {% block content %}
 Statystyki : 
-
 {% for node_name, node_stat in stats %}
 <p>{{ node_name }} : <br>
 	{% for stat,value in node_stat %}
@@ -32,10 +31,13 @@ Statystyki :
 		{{"Ilość indeksów:"}}
 		{{value}}<br>
 	{% elif stat=="words_coll" %}
-		{{"Ilość znalezionych słów:"}}
+		{{"Ilość znalezionych słów:(baza)"}}
 		{{value}}<br>
 	{% elif stat=="processed_links" %}
 		{{"Ilość przetworzonych linków:"}}
+		{{value}}<br>
+	{% elif stat=="words_total" %}
+		{{"Znaleziono słów na stronie:"}}
 		{{value}}<br>
 	{% endif %}
 	{% endfor %}
