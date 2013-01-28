@@ -40,7 +40,7 @@ init([_HelperServersCfg, PersistenceCfg]) ->
 	[RetryTimeCfg] = PersistenceCfg,
 %% 	{WordsCacheCfg, IndexCacheCfg, ConnManagerCfg} = HelperServersCfg,
 %% 	State = {WordsCacheCfg, IndexCacheCfg, ConnManagerCfg, RetryTimeCfg},
-	Pool = resource_pool:new(mongo:connect_factory({"backrub2.iisg.agh.edu.pl", 27017}), 5),
+	Pool = resource_pool:new(mongo:connect_factory({"localhost", 27017}), 5),
 	State = {{pool, Pool} ,RetryTimeCfg},
     {ok, State}.
 
@@ -184,7 +184,7 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 
 get_conn_cfg(index, State) ->
 	Pool = get_state_value(conn_pool, State),
-	{ok, Conn} =resource_pool:get(Pool)
+	{ok, Conn} = resource_pool:get(Pool)
 	{'Index', 'Crawler', Conn};
 
 get_conn_cfg(words, State) ->
