@@ -111,7 +111,7 @@ add_index_internal(Word, UrlId, State) ->
 		{WordId, was_present} ->
 			lager:debug("Updating index: {~p, ~p}", [WordId, UrlId]),
 			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-			indexdb_functions:update_index(WordId, UrlId, ConnCfg)
+			indexdb_functions:update_index(WordId, UrlId, ConnCfg);
 		
 		{WordId, new} ->
 			lager:debug("Creating new index: {~p, ~p}", [WordId, UrlId]),
