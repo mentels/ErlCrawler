@@ -126,8 +126,9 @@ get_index_data(WordId, State) ->
 	
 				{UrlIdList, UrlIdListSize} ->
 					lager:debug("Index found in db for word id: ~p", [WordId]),
-					SortredUrlIdList = lists:sort(get_url_id_list_sort_fun(), UrlIdList),
-					{{SortredUrlIdList, UrlIdListSize}, found_in_db}
+%% 					SortredUrlIdList = lists:sort(get_url_id_list_sort_fun(), UrlIdList),
+%% 					{{SortredUrlIdList, UrlIdListSize}, found_in_db}
+					{{UrlIdList, UrlIdListSize}, found_in_db}
 			end;
 		
 		IndexData ->
@@ -177,7 +178,7 @@ add_index_internal(Word, UrlId, State) ->
 				updated ->
 					lager:debug("Updating index in db: {~p, ~p}", [WordId, UrlId]),
 					{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-					indexdb_functions:update_index_data(WordId, UrlId, ConnCfg);			
+					indexdb_functions:update_index_data(WordId, UrlIdList, ConnCfg);			
 
 				not_updated ->
 					ok

@@ -25,9 +25,9 @@ get_index_data(WordId, ConnCfg) ->
 			no_index
 	end.
 
-update_index_data(WordId, UrlId, ConnCfg) ->
+update_index_data(WordId, UrlIdList, ConnCfg) ->
 	SelectorDoc = {'_id', WordId},
-	ModifierDoc = { bson:utf8("$inc"), {urls_cnt, 1}, bson:utf8("$push"), {urls, UrlId}},
+	ModifierDoc = { bson:utf8("$inc"), {urls_cnt, 1}, bson:utf8("$set"), {urls, UrlIdList}},
 	db_helper:perform_action({modify, SelectorDoc, ModifierDoc}, ConnCfg).
 
 %% ------------------------------------------------------------------
