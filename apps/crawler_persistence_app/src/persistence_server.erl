@@ -35,11 +35,13 @@ prepare_to_stop(ServerName) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([HelperServersCfg, PersistenceCfg]) ->
+init([_HelperServersCfg, PersistenceCfg]) ->
 	process_flag(trap_exit, true),
 	[RetryTimeCfg] = PersistenceCfg,
-	{WordsCacheCfg, IndexCacheCfg, ConnManagerCfg} = HelperServersCfg,
-	State = {WordsCacheCfg, IndexCacheCfg, ConnManagerCfg, RetryTimeCfg},
+%% 	{WordsCacheCfg, IndexCacheCfg, ConnManagerCfg} = HelperServersCfg,
+%% 	State = {WordsCacheCfg, IndexCacheCfg, ConnManagerCfg, RetryTimeCfg},
+	Pool = resource_pool:new(mongo:connect_factory({"backrub2.iisg.agh.edu.pl", 27017}), 5),
+	State = {{pool, Pool} ,RetryTimeCfg},
     {ok, State}.
 
 
@@ -65,10 +67,12 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-terminate(shutdown, _State) ->
+terminate(shutdown, State) ->
+	close_pool(State),
 	ok;
 
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+	close_pool(State),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -77,12 +81,17 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+close_pool(State) ->
+	Pool = get_state_value(pool, State),
+	resource_pool:close(Pool).
+
 
 get_word_data(Word, State) ->
 	lager:debug("Obtaining id for word: ~p.", [Word]),
 	case get_word_id_from_cache(Word, State) of
 		word_not_found ->
-			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), words),
+			Pool = get_state_value(conn_pool, State),
+			ConnCfg = {'Crawler', 'Words', resource_pool:get(Pool)},
 			case get_word_id_from_db(Word, ConnCfg) of
 				no_word ->
 					{Word, WordId} = create_new_cache_word_doc(Word),
@@ -91,7 +100,7 @@ get_word_data(Word, State) ->
 					case update_words_cache({add_word_cache_doc, {Word, WordId}}, State) of
 						inserted ->
 							wordsdb_functions:save_word(WordId, Word, ConnCfg),
-							{WordId, was_new};
+							{WordId, new};
 
 						not_inserted ->
 							{WordId, was_present}
@@ -115,13 +124,15 @@ add_index_internal(Word, UrlId, State) ->
 	case get_word_data(Word, State) of
 		{WordId, was_present} ->
 			lager:debug("Updating index: {~p, ~p}", [WordId, UrlId]),
-			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-			indexdb_functions:update_index(WordId, UrlId, ConnCfg);
+%% 			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
+			Pool = get_state_value(conn_pool, State),
+			indexdb_functions:update_index(WordId, UrlId, {'Index', 'Crawler', resource_pool:get(Pool)});
 		
 		{WordId, new} ->
 			lager:debug("Creating new index: {~p, ~p}", [WordId, UrlId]),
-			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-			indexdb_functions:save_new_index(WordId, UrlId, ConnCfg),
+%% 			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
+			Pool = get_state_value(conn_pool, State),
+			indexdb_functions:save_new_index(WordId, UrlId, {'Index', 'Crawler', resource_pool:get(Pool)}),
 			ok
 	end.
 			
@@ -176,27 +187,33 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 %%
 %% Cache server names helper functions.
 %%
-get_server_name(words, State) ->
-	get_state_value(words_cache_server_name, State);
-
-get_server_name(index, State) ->
-	get_state_value(index_cache_server_name, State);
-
-get_server_name(conn_manager, State) ->
-	get_state_value(conn_manager_server_name, State).
+%% get_server_name(words, State) ->
+%% 	get_state_value(words_cache_server_name, State);
+%% 
+%% get_server_name(index, State) ->
+%% 	get_state_value(index_cache_server_name, State);
+%% 
+%% get_server_name(conn_manager, State) ->
+%% 	get_state_value(conn_manager_server_name, State).
 
 %%
 %% State handling helper functions.
 %% 
 
-get_state_value(words_cache_server_name, {{words_cache_server_name, Value}, _, _, _}) ->
+%% get_state_value(words_cache_server_name, {{words_cache_server_name, Value}, _, _, _}) ->
+%% 	Value;
+%% 
+%% get_state_value(index_cache_server_name, {_, {index_cache_server_name, Value}, _, _}) ->
+%% 	Value;
+%% 
+%% get_state_value(conn_manager_server_name, {_, _, {conn_manager_server_name, Value}, _}) ->
+%% 	Value;
+%% 
+%% get_state_value(retry_time, {_, _, _, {retry_time, Value}}) ->
+%% 	Value.
+
+get_state_value(retry_time, {_, {retry_time, Value}}) ->
 	Value;
 
-get_state_value(index_cache_server_name, {_, {index_cache_server_name, Value}, _, _}) ->
-	Value;
-
-get_state_value(conn_manager_server_name, {_, _, {conn_manager_server_name, Value}, _}) ->
-	Value;
-
-get_state_value(retry_time, {_, _, _, {retry_time, Value}}) ->
-	Value.
+get_state_value(conn_pool, {{pool, Pool}, _}) ->
+	Pool.

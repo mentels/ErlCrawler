@@ -10,10 +10,10 @@
   {mod, { crawler_persistence_app, [] }},
   {env, [
   	{channels_cfg, [
-  		{channels_cnt, 1000}
+  		{channels_cnt, 2000}
   	]},
   	{conn_manager_cfg, [
-  		{pool_size, 50},
+  		{pool_size, 5},
   		{host_cfg, {localhost, 27017}},
   		{db_name, 'Crawler'},
   		{words_coll, 'Words'},

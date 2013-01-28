@@ -128,9 +128,9 @@ dispatch_add_index(Word, UrlId, DispatchTabId, _ChannelsCnt, RequestCnt) ->
 clean_words_cache() ->
 	WordsCacheSize = ets:info(words_cache_tab, size),
 	if 
-		 WordsCacheSize >= 5000000 ->
+		 WordsCacheSize >= 2000000 ->
 			ets:delete_all_objects(words_cache_tab),
-			timer:sleep(20000),
+			timer:sleep(60000),
 			spawn(?MODULE, clean_words_cache, []);
 		
 		true ->

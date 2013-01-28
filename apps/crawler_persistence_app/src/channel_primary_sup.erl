@@ -40,4 +40,4 @@ init(ChannelId) ->
 										 [ChannelSecondarySupName, ChannelId, ConnManagerName], infinity),
 	
 	
-    {ok, { { one_for_one , 0, 1}, [ConnManagerServerSpec, ChannelSecondarySupSpec] } }. 
+    {ok, { { one_for_one , 0, 1}, [ChannelSecondarySupSpec] } }. 
