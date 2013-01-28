@@ -184,12 +184,12 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 
 get_conn_cfg(index, State) ->
 	Pool = get_state_value(conn_pool, State),
-	{ok, Conn} = resource_pool:get(Pool)
+	{ok, Conn} = resource_pool:get(Pool),
 	{'Index', 'Crawler', Conn};
 
 get_conn_cfg(words, State) ->
 	Pool = get_state_value(conn_pool, State),
-	{ok, Conn} =resource_pool:get(Pool)
+	{ok, Conn} =resource_pool:get(Pool),
 	{'Index', 'Crawler', Conn}.
 
 	
