@@ -55,7 +55,7 @@ init([ChannelId, ConnManagerServerName]) ->
 	PersistenceServerSpec = ?CHILD_CHANNEL(PersistenceServerName, persistence_server, worker,
 										   [PersistenceServerName, HelperServersCfg, PersistenceCfg], infinity),
 	
-    ChildrenSpecs = [WordsCacheServerSpec, PersistenceServerSpec],
+    ChildrenSpecs = [PersistenceServerSpec],
     RestartStrategy = { one_for_one , 0, 1},
 	
     {ok, { RestartStrategy, ChildrenSpecs } }. 
