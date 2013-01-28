@@ -90,8 +90,7 @@ get_word_data(Word, State) ->
 	lager:debug("Obtaining id for word: ~p.", [Word]),
 	case get_word_id_from_cache(Word, State) of
 		word_not_found ->
-			Pool = get_state_value(conn_pool, State),
-			ConnCfg = {'Crawler', 'Words', resource_pool:get(Pool)},
+			ConnCfg = get_conn_cfg(words, State),
 			case get_word_id_from_db(Word, ConnCfg) of
 				no_word ->
 					{Word, WordId} = create_new_cache_word_doc(Word),
@@ -125,14 +124,14 @@ add_index_internal(Word, UrlId, State) ->
 		{WordId, was_present} ->
 			lager:debug("Updating index: {~p, ~p}", [WordId, UrlId]),
 %% 			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-			Pool = get_state_value(conn_pool, State),
-			indexdb_functions:update_index(WordId, UrlId, {'Index', 'Crawler', resource_pool:get(Pool)});
+			ConnCfg = get_conn_cfg(index, State),
+			indexdb_functions:update_index(WordId, UrlId, ConnCfg);
 		
 		{WordId, new} ->
 			lager:debug("Creating new index: {~p, ~p}", [WordId, UrlId]),
 %% 			{ok, ConnCfg} = conn_manager_server:get_connection_cfg(get_server_name(conn_manager, State), index),
-			Pool = get_state_value(conn_pool, State),
-			indexdb_functions:save_new_index(WordId, UrlId, {'Index', 'Crawler', resource_pool:get(Pool)}),
+			ConnCfg = get_conn_cfg(index, State),
+			indexdb_functions:save_new_index(WordId, UrlId, ConnCfg),
 			ok
 	end.
 			
@@ -183,7 +182,17 @@ update_words_cache({add_word_cache_doc, CacheWordDoc}, State) ->
 %% 	end.
 	
 
+get_conn_cfg(index, State) ->
+	Pool = get_state_value(conn_pool, State),
+	{ok, Conn} =resource_pool:get(Pool)
+	{'Index', 'Crawler', Conn};
 
+get_conn_cfg(words, State) ->
+	Pool = get_state_value(conn_pool, State),
+	{ok, Conn} =resource_pool:get(Pool)
+	{'Index', 'Crawler', Conn}.
+
+	
 %%
 %% Cache server names helper functions.
 %%
