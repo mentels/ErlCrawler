@@ -29,9 +29,6 @@ get_count(index_coll) ->
 	db_helper:perform_action({count, {}}, ConnCfg);
 
 get_count(indexes) ->
-	{ok, 0};
-
-get_count(indexes2) ->
 	ProjectionDoc = {'_id', 0, urls, 1},
 	{ok, ConnCfg} = conn_manager_server:get_connection_cfg(conn_manager_server_master, index),
 	{ok, Cursor} = db_helper:perform_action({find, {}, ProjectionDoc}, ConnCfg),
