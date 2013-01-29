@@ -2,4 +2,15 @@
 
 {% block content %}
 Konfiguracja
+{% for node, down_man_conf in confs %}
+	<form action="/config/save" method="post">
+		<input name ="node" type="text" type="hidden" value="{{node}}" />
+	{{ node }} </br>
+	{% for conf, value in down_man_conf %}
+		{{conf}}<input name="{{conf}}" type="text" value={{value}} /> </br>
+	{% endfor %}
+		<input type="submit" value="Zapisz" />
+	</form>
+{% endfor %}
+
 {% endblock %}

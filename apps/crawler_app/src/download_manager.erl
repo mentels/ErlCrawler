@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([spawn_downloaders/1,set_max_active_workers/1, get_max_active_workers/0, get_current_active_workers/0, start_processing/0]).
+-export([spawn_downloaders/1,set_max_active_workers/1, get_max_active_workers/0, get_current_active_workers/0, start_processing/0,get_conn_timeout/0,get_down_timeout/0,get_max_redir/0,set_conn_timeout/1,set_down_timeout/1,set_max_redir/1]).
 
 %% ====================================================================
 %% Behavioural functions 
@@ -27,15 +27,35 @@ init([{MaxWorkers,_,_,_,_}=Cfg]) ->
 start_processing()->
 	gen_server:call(?MODULE, start_processing).
 
+%% S/GETTERY
+get_current_active_workers()->
+	gen_server:call(?MODULE,get_current_active_workers).
+
 set_max_active_workers(Number)->
 	gen_server:call(?MODULE,{set_max_active_workers,Number}).
 
 get_max_active_workers()->
 	gen_server:call(?MODULE,get_max_active_workers).
 
-get_current_active_workers()->
-	gen_server:call(?MODULE,get_current_active_workers).
+set_max_redir(Number) ->
+	gen_server:call(?MODULE, {set_max_redir,Number}).
 
+get_max_redir() ->
+	gen_server:call(?MODULE, get_max_redir).
+
+set_down_timeout(Timeout)->
+	gen_server:call(?MODULE,{set_down_timeout,Timeout}).
+
+get_down_timeout()->
+	gen_server:call(?MODULE,get_down_timeout).
+
+set_conn_timeout(Timeout)->
+	gen_server:call(?MODULE,{set_conn_timeout,Timeout}).
+
+get_conn_timeout()->
+	gen_server:call(?MODULE,get_conn_timeout).
+
+	
 %% ==============================
 %% HANDLE_CALLS =================
 %% ==============================
@@ -59,15 +79,34 @@ handle_call(start_processing,_From,{state,Active_workers,Max_workers,Cfg}=State)
 %% 2. START PROCESSING===========
 %% ==============================
 
-handle_call({set_max_active_workers,Number},_From,{state,Active_workers,Max_workers,Cfg}=State) when Number>=0 ->
-	NewState = {state,Active_workers,Number,Cfg},
-	{reply,ok,NewState};
 
 handle_call(get_max_active_workers,_From,{state,_Active_workers,Max_workers,_Cfg}=State) ->
-	{reply,Max_workers,State};
+	{reply,{Max_workers},State};
+
+handle_call({set_max_active_workers,Number},_From,{state,Active_workers,_Max_workers,Cfg})->
+	{reply,ok,{state,Active_workers,Number,Cfg}};
 
 handle_call(get_current_active_workers,_From,{state,Active_workers,_Max_workers,_Cfg}=State) ->
-	{reply,Active_workers,State}.
+	{reply,{Active_workers},State};
+
+handle_call(get_max_redir,_From,{state,_Active_workers,_Max_workers,{_,_,_,_,Redirect_limit}}=State) ->
+	{reply,{Redirect_limit},State};
+
+handle_call({set_max_redir,Number},_From,{state,_Active_workers,_Max_workers,{Max_workers,Uds_fail_interval,Connection_timeout,Download_timeout,_Redirect_limit}}=State) ->
+	{reply,ok,{state,_Active_workers,_Max_workers,{Max_workers,Uds_fail_interval,Connection_timeout,Download_timeout,Number}}};
+
+handle_call(get_conn_timeout,_From,{state,_Active_workers,_Max_workers,{_,_,Connection_timeout,_,_}}=State)->
+	{reply,{Connection_timeout},State};
+
+handle_call({set_conn_timeout,Number},_From,{state,Active_workers,Max_workers,{Max_workers2,Uds_fail_interval,Connection_timeout,Download_timeout,Redirect_limit}}=State)->
+	{reply,ok,{state,Active_workers,Max_workers,{Max_workers2,Uds_fail_interval,Number,Download_timeout,Redirect_limit}}};
+
+handle_call(get_down_timeout,_From,{state,_,_,{_,_,_,Download_timeout,_}} = State) ->
+	{reply,{Download_timeout},State};
+
+handle_call({set_down_timeout,Number},_,{state,Active_workers,Max_workers,{Max_workers2,Uds_fail_interval,Connection_timeout,Download_timeout,Redirect_limit}}) ->
+	{reply,ok,{state,Active_workers,Max_workers,{Max_workers2,Uds_fail_interval,Connection_timeout,Number,Redirect_limit}}}.
+
 
 %% ==============================
 %% SPAWN DOWNLOADERS ============
