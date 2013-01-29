@@ -89,6 +89,7 @@ get_word_data(Word, State) ->
 					lager:debug("Word id not found in cache nor in db. New cache word doc created: {~p, ~p}.", 
 								[Word, WordId]),
 					update_words_cache({add_word_cache_doc, {Word, WordId}}, State),
+					wordsdb_functions:save_word(WordId, Word, ConnCfg),
 					{WordId, new};
 				
 				WordId ->
