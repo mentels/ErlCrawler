@@ -3,11 +3,13 @@
 
 stats('GET',[]) ->
  	{ok,Nodes} = application:get_env(crawler,nodes),
-	{ok, [{stats,lists:map(fun(X) -> {X,utils:node_stats(X)} end , Nodes)}]}.
+	Active_nodes = utils:ping_nodes(Nodes),
+	{ok, [{stats,lists:map(fun(X) -> {X,utils:node_stats(X)} end , Active_nodes)}]}.
  
 configs('GET',[]) ->
 	{ok,Nodes} = application:get_env(crawler,nodes),
-	{ok, [{confs,lists:map(fun(X) -> {X,utils:get_down_man_conf(X)} end , Nodes)}]}.
+	{ok, [{confs,lists:map(fun(X) -> {X,utils:get_down_man_conf(X)} end , Active_nodes)}]}.
+	Active_nodes = utils:ping_nodes(Nodes),
 
 save('POST',[])->
 	Node = Req:post_param("node"),

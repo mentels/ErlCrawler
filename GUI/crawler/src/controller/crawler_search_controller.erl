@@ -3,10 +3,12 @@
 
 index('GET', []) ->
     {ok,Nodes} = application:get_env(crawler,nodes),
-    {ok,[{nodes,Nodes}]}.
+	Active_nodes = utils:ping_nodes(Nodes),
+    {ok,[{nodes,Active_nodes}]}.
 
 results('POST',[])->
      Arg = Req:post_param("word"),
  	{ok,Nodes} = application:get_env(crawler,nodes),
- 	Urls = utils:query_nodes_4_word(Nodes,Arg,[]),
+	Active_nodes = utils:ping_nodes(Nodes),
+ 	Urls = utils:query_nodes_4_word(Active_nodes,Arg,[]),
     {ok, [{urls,Urls}]}.
