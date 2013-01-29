@@ -7,8 +7,17 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([query_nodes/4,query_nodes_4_word/3,node_stats/1,get_down_man_conf/1,set_down_man_conf/2]).
+-export([query_nodes/4,query_nodes_4_word/3,node_stats/1,get_down_man_conf/1,set_down_man_conf/2,ping_nodes/1]).
 
+ping_nodes([]) ->
+	[];
+ping_nodes([H|T]) ->
+	case net_adm:ping(H) of
+		pang -> %% fail
+			ping_nodes(T);
+		pong ->
+			[H] ++ ping_nodes(T)
+	end.
 
 set_down_man_conf(Node,{Max_Active_Workers,Max_redir,Down_timeout,Conn_timeout})->
 	rpc:call(list_to_atom(Node),download_manager,set_max_active_workers,[list_to_integer(Max_Active_Workers)],1000),
