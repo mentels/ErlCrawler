@@ -8,8 +8,8 @@ stats('GET',[]) ->
  
 configs('GET',[]) ->
 	{ok,Nodes} = application:get_env(crawler,nodes),
-	{ok, [{confs,lists:map(fun(X) -> {X,utils:get_down_man_conf(X)} end , Active_nodes)}]}.
 	Active_nodes = utils:ping_nodes(Nodes),
+	{ok, [{confs,lists:map(fun(X) -> {X,utils:get_down_man_conf(X)} end , Active_nodes)}]}.
 
 save('POST',[])->
 	Node = Req:post_param("node"),
