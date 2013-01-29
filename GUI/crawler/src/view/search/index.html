@@ -1,18 +1,17 @@
 {% extends "base.html" %}
 
-{% block menu %}
-	<a class="current" href="/">Strona główna</a>|
-	<a href="/config/stats">Statystyki</a>|
-	<a href="/config/configs">Konfiguracja</a>
-{% endblock %}
-
-
 {% block content %}
 
-<form action="/search/results" method="post">
-    <input name="word" type="text" maxlength="100" />
-    <input type="submit" value="Submit" />
-</form>
-
+<h3>Wyszukiwarka indeksu odwrotnego:</h3>
+<br>
+<div id="search">
+      <form action="/search/results" method="post">
+        <fieldset>
+          <legend>Wyszukiwarka</legend>
+          <input type="text" value="Podaj szukane słowo..." name="word" />
+          <input type="submit" name="go" id="go" value="Szukaj" />
+        </fieldset>
+      </form>
+    </div>
 {% endblock %}
 

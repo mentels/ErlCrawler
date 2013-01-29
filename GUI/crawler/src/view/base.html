@@ -3,27 +3,37 @@
 <head>
 
 <meta http-equiv="Content-type" content="text/html;charset=utf-8" />
-    <link rel="stylesheet" href="/css/style.css" />
-    <title>{% block title %}Homepage!{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <title>{% block title %}ErlangCrawler - system udostępniania treści{% endblock %}</title>
 </head>
 
 <body>
-    <div id="menu">
-        {% block menu %}
-        <a class="current" href="/">Strona główna</a>|
-		<a href="/config/stats">Statystyki</a>|
-		<a href="/config/configs">Konfiguracja</a>
-        {% endblock %}
+  <div id="head">
+    <div id="logo">
+       <h1><a href="#"><strong><span>E</span>rl</strong><span>ang Crawler</span></a></h1>
     </div>
-
+    <div id="quicklinks">
+    	<ul>
+    		<li><a href="/">Strona główna</a></li>
+    		<li><a href="/config/stats">Statystyki</a></li>
+    		<li><a class="last" href="/config/configs">Konfiguracja</a></li>
+    	</ul>
+    </div>
+  </div>
+    <div id="description">System zarządzania i przetwarzania treści stron WWW</div>
     <div id="content">
         {% block content %}{% endblock %}
     </div>
     
     <div id="footer">
-        {% block footer %}ErlangCrawler - 2013{% endblock %}
+        <div id="copyright">
+     {% block footer %}{% endblock %}
+      <p class="fl_left">ErlangCrawler - system udostępniania treści </a></p>
+      <p class="fl_right">Kraków - 2013</p>
+      <br class="clear" />
+    </div>
     </div>
     
-    
+     
 </body>
 </html>

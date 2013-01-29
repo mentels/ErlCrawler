@@ -1,47 +1,53 @@
 {% extends "base.html" %}
 
 {% block content %}
-Statystyki : 
+<h1>Statystyki :</h1> 
 {% for node_name, node_stat in stats %}
-<p>{{ node_name }} : <br>
+
+<h3>{{ node_name }}</h3 : <br>
+<table border=1>
 	{% for stat,value in node_stat %}
-	
+	<tr>
 	{% if stat=="memory_total" %}
-		{{ "Zużycie pamięci" }} : 
+		<td>{{ "Zużycie pamięci" }} :</td>
+			<td> 
 			{% for val,unit in value %}
 				{{val}}{{unit}}{{" "}}
 			{% endfor %}
-		<br>	
+			</td>
 	{% elif stat=="uptime" %}
-		{{ "Czas działania " }}
+		<td>{{ "Czas działania " }}</td>
+		<td>
 		{% for val,unit in value %}
 			{{val}}{{unit}}{{" "}}
 		{% endfor %}
-		<br>
+		</td>
 	{% elif stat=="input_data" %}
-		{{ "Pobrano danych" }} : 
+		<td>{{ "Pobrano danych" }} :</td>
+		<td> 
 			{% for val,unit in value %}
 				{{val}}{{unit}}{{" "}}
 			{% endfor %}
-		<br>
+		</td>
 	{% elif stat=="index_coll" %}
-		{{"Ilość wpisów z indeksami:"}}
-		{{stat}}:{{value}}<br>
+		<td>{{"Ilość wpisów z indeksami:"}}</td>
+		<td>{{value}}</td>
 	{% elif stat=="indexes" %}
-		{{"Ilość indeksów:"}}
-		{{value}}<br>
+		<td>{{"Ilość indeksów:"}}</td>
+		<td>{{value}}</td>
 	{% elif stat=="words_coll" %}
-		{{"Ilość znalezionych słów:(baza)"}}
-		{{value}}<br>
+		<td>{{"Ilość znalezionych słów:(baza)"}}</td>
+		<td>{{value}}</td>
 	{% elif stat=="processed_links" %}
-		{{"Ilość przetworzonych linków:"}}
-		{{value}}<br>
+		<td>{{"Ilość przetworzonych linków:"}}</td>
+		<td>{{value}}</td>
 	{% elif stat=="words_total" %}
-		{{"Znaleziono słów na stronie:"}}
-		{{value}}<br>
+		<td>{{"Znaleziono słów na stronie:"}}</td>
+		<td>{{value}}</td>
 	{% endif %}
+	</tr>
 	{% endfor %}
-</p>
+</table>
 {% endfor %}
 
 {% endblock %}
