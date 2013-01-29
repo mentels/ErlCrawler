@@ -1,15 +1,22 @@
 {% extends "base.html" %}
 
 {% block content %}
-Konfiguracja
+<h1>Konfiguracja</h1>
 {% for node, down_man_conf in confs %}
 	<form action="/config/save" method="post">
-		<input name ="node" type="text" type="hidden" value="{{node}}" />
-	{{ node }} </br>
+	<table>
+	<tr>
+		<td><input name ="node" type="text" hidden="true" value="{{node}}" /></td><td></td>
+	<h2>Nazwa węzła:</h2><b>{{node}}</b> </br></br>
 	{% for conf, value in down_man_conf %}
-		{{conf}}<input name="{{conf}}" type="text" value={{value}} /> </br>
+		<tr>
+			<td><label for="{{conf}}">{{conf}}</label></td> <td><input class = "formInput" id="{{conf}}" name="{{conf}}" type="text" value="{{value}}" /></td>
+		</tr>
 	{% endfor %}
-		<input type="submit" value="Zapisz" />
+		<tr>
+			<td></td><td><input type="submit" value="Zapisz" /></td>
+		</tr>
+	</table>
 	</form>
 {% endfor %}
 
