@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/1, dispatch_add_index/2, report_queues/0, prepare_to_stop/0]).
--export([dispatch_add_index/4, clean_words_cache/0]).
+-export([dispatch_add_index/4]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -42,12 +42,10 @@ prepare_to_stop() ->
 
 init(DispatcherCfg) ->
 	process_flag(trap_exit, true),
-	ets:new(words_cache_tab, [set, {keypos, 1}, public, named_table]),
 	{{channels_cnt, ChannelsCnt}, {persistence_server_names, PersistenceServerNameList}} = DispatcherCfg,
 	DispatchTabId = ets:new(dispatch_table, [set, {keypos, 1}, protected, named_table]),
 	set_dispatch_table(DispatchTabId, ChannelsCnt, PersistenceServerNameList),
-	State = {{dispatch_tab_id, DispatchTabId}, {channels_cnt, ChannelsCnt}, {request_cnt, 0}},
-	spawn(?MODULE, clean_words_cache, []),
+	State = {{dispatch_tab_id, DispatchTabId}, {channels_cnt, ChannelsCnt}},
     {ok, State}.
 
 
@@ -67,7 +65,6 @@ handle_call(_Request, _From, State) ->
 handle_cast({dispatch_add_index, Word, UrlId}, State)->
 	DispatchTabId = get_state_value(dispatch_tab_id, State),
 	ChannelsCnt = get_state_value(channels_cnt, State),
-	RequestCnt = get_state_value(request_cnt, State),
 	spawn(?MODULE, dispatch_add_index, [Word, UrlId, DispatchTabId, ChannelsCnt]),
 	{noreply, State};
 
@@ -117,34 +114,11 @@ dispatch_add_index(Word, UrlId, DispatchTabId, ChannelsCnt) ->
 	[[PersistenceServerName]] = ets:match(DispatchTabId, {Key, '$0'}),
 	persistence_server:add_index(PersistenceServerName, Word, UrlId).
 
-
-clean_words_cache() ->
-	WordsCacheSize = ets:info(words_cache_tab, size),
-	if 
-		 WordsCacheSize >= 5000000 ->
-			ets:delete_all_objects(words_cache_tab),
-			timer:sleep(20000),
-			spawn(?MODULE, clean_words_cache, []);
-		
-		true ->
-			timer:sleep(20000),
-			spawn(?MODULE, clean_words_cache, [])
-	end.
-		
-
-
 %%
 %% State handling helper functions.
 %%
-set_state_value({request_cnt, RequestCnt}, {Cfg1, Cfg2, _}) ->
-	{Cfg1, Cfg2, {request_cnt, RequestCnt}}.
-
-
-get_state_value(dispatch_tab_id, {{dispatch_tab_id, DispatchTabId}, _, _}) ->
+get_state_value(dispatch_tab_id, {{dispatch_tab_id, DispatchTabId}, _}) ->
 	DispatchTabId;
 
-get_state_value(channels_cnt, {_, {channels_cnt, ChannelsCnt}, _}) ->
-	ChannelsCnt;
-
-get_state_value(request_cnt, {_, _, {request_cnt, RequestCnt}}) ->
-	RequestCnt.
+get_state_value(channels_cnt, {_, {channels_cnt, ChannelsCnt}}) ->
+	ChannelsCnt.
