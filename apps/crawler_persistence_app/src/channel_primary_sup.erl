@@ -32,12 +32,19 @@ init(ChannelId) ->
 	ConnManagerName = config_helper:get_worker_name(conn_manager_server, ChannelId),
 	ConnManagerServerSpec = ?CHILD_CHANNEL(ConnManagerName, conn_manager_server, worker, 
 										   [ConnManagerName, ConnManagerCfg], infinity),
+	
+	%% Set words cache server.
+	WordsCacheServerCfg = config_helper:get_server_config(words_cache_server),
+	WordsCacheServerName = config_helper:get_worker_name(words_cache_server, ChannelId),
+	WordsCacheServerSpec = ?CHILD_CHANNEL(WordsCacheServerName, words_cache_server, worker, 
+										  [WordsCacheServerName, WordsCacheServerCfg], infinity),
+	
 
-	
-	%% Set secondary channel supervisor
-	ChannelSecondarySupName = config_helper:get_worker_name(channel_secondary_sup, ChannelId),
-	ChannelSecondarySupSpec = ?CHILD_CHANNEL(ChannelSecondarySupName, channel_secondary_sup, supervisor, 
-										 [ChannelSecondarySupName, ChannelId, ConnManagerName], infinity),
-	
-	
-    {ok, { { one_for_one , 0, 1}, [ConnManagerServerSpec, ChannelSecondarySupSpec] } }. 
+	%% Set persistence server.
+	PersistenceCfg = config_helper:get_server_config(persistence_server),
+	PersistenceServerName = config_helper:get_worker_name(persistence_server, ChannelId),
+	HelperServersCfg = {{words_cache_server_name, WordsCacheServerName}, {conn_manager_server_name, ConnManagerName}},
+	PersistenceServerSpec = ?CHILD_CHANNEL(PersistenceServerName, persistence_server, worker,
+										   [PersistenceServerName, HelperServersCfg, PersistenceCfg], infinity),
+
+    {ok, { { one_for_one , 0, 1}, [ConnManagerServerSpec, WordsCacheServerSpec, PersistenceServerSpec] } }. 
