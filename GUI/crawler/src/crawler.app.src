@@ -5,6 +5,6 @@
         {registered, []},
         {applications, [kernel, stdlib, crypto, boss]},
         {env, [{nodes,
-  			['erlcrawler@172.16.31.1', 'erlcrawler@172.16.31.2', 'erlcrawler@172.16.31.3', 'erlcrawler@172.16.31.4', 'erlcrawler@172.16.31.5']
+		  ['erlcrawler@172.16.31.1', 'erlcrawler@172.16.31.2', 'erlcrawler@172.16.31.3', 'erlcrawler@172.16.31.4', 'erlcrawler@172.16.31.5']
   		}]}
     ]}.
